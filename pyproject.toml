@@ -1,0 +1,143 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pythemes"
+dynamic = ["version"]
+description = 'select desktop themes'
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [{ name = "haaag", email = "git.haaag@gmail.com" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = []
+
+[project.urls]
+Documentation = "https://github.com/unknown/pythemes#readme"
+Issues = "https://github.com/unknown/pythemes/issues"
+Source = "https://github.com/unknown/pythemes"
+
+[project.scripts]
+pythemes = "pythemes:main"
+
+[tool.hatch.version]
+path = "pythemes/__init__.py"
+
+[tool.hatch.envs.default]
+dependencies = ["coverage[toml]>=6.5", "pytest"]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "coverage run -m pytest {args:tests}"
+cov-report = ["- coverage combine", "coverage report"]
+cov = ["test-cov", "cov-report"]
+
+[[tool.hatch.envs.all.matrix]]
+python = ["3.8", "3.9", "3.10", "3.11"]
+
+[tool.hatch.envs.lint]
+detached = true
+dependencies = ["mypy>=1.0.0", "ruff>=0.0.243"]
+[tool.hatch.envs.lint.scripts]
+typing = "mypy --install-types --non-interactive {args:pythemes tests}"
+style = ["ruff {args:.}"]
+fmt = ["ruff --fix {args:.}", "style"]
+all = ["style", "typing"]
+
+[tool.ruff]
+fix = false
+line-length = 120
+# output-format = "full"
+show-fixes = true
+target-version = "py37"
+exclude = [".venv", ".mypy_cache", ".pytest_cache"]
+
+[tool.ruff.format]
+quote-style = "single"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+
+[tool.ruff.lint]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+task-tags = ["HACK", "FIX", "BUG"]
+select = [
+  "A",
+  "ARG",
+  "B",
+  "C",
+  "DTZ",
+  "E",
+  "EM",
+  "F",
+  "FBT",
+  "I",
+  "ICN",
+  "N",
+  "PLC",
+  "PLE",
+  "PLR",
+  "PLW",
+  "Q",
+  "RUF",
+  "S",
+  "T",
+  "TID",
+  "UP",
+  "W",
+  "YTT",
+]
+extend-select = [
+  "B",   # (flake8-bugbear)
+  "BLE", # (flake8-blind-except)
+  "C4",  # (flake8-comprehensions)
+  # "ERA",  # (eradicate)
+  "I",   # (isort)
+  "ICN", # (flake8-import-conventions)
+  "INP", # (flake8-no-pep420)
+  "N",   # (pep8-naming)
+  "NPY", # (numpy-specific-rules)
+  "PGH", # (pygrep-hooks)
+  "PIE", # (flake8-pie)
+  "PTH", # (flake8-use-pathlib)
+  "Q",   # (flake8-quotes)
+  "RET", # (flake8-return)
+  "RSE", # (flake8-raise)
+  "RUF", # (ruff-specific-rules)
+  "S",   # (flake8-bandit)
+  "SIM", # (flake8-simplify)
+  "T20", # (flake8-print)
+  "TCH", # (flake8-type-checking)
+  "TID", # (flake8-tidy-imports)
+  "YTT", # (flake8-2020)
+]
+ignore = ["Q000", "T201"]
+# ignore = ["Q000", "Q003", "FBT001", "FBT002", "ARG002", "FBT003"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+order-by-type = true
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = [
+  "S101",   # use of `assert` detected
+  "ARG002", # unused-method-argument
+  "Q000",   # single-quote preferred
+  "FBT001", # boolean-type-hint-positional-argument
+  "FBT002", # boolean-default-value-positional-argument
+  "A003",   # builtin-attribute-shadowing
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
