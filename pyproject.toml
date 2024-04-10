@@ -29,10 +29,10 @@ Issues = "https://github.com/unknown/pythemes/issues"
 Source = "https://github.com/unknown/pythemes"
 
 [project.scripts]
-pythemes = "pythemes:main"
+pythemes = "pythemes.__main__:main"
 
 [tool.hatch.version]
-path = "pythemes/__init__.py"
+path = "pythemes/__main__.py"
 
 [tool.hatch.envs.default]
 dependencies = ["coverage[toml]>=6.5", "pytest"]
@@ -88,7 +88,6 @@ select = [
   "PLE",
   "PLR",
   "PLW",
-  "Q",
   "RUF",
   "S",
   "T",
@@ -110,7 +109,7 @@ extend-select = [
   "PGH", # (pygrep-hooks)
   "PIE", # (flake8-pie)
   "PTH", # (flake8-use-pathlib)
-  "Q",   # (flake8-quotes)
+  # "Q",   # (flake8-quotes)
   "RET", # (flake8-return)
   "RSE", # (flake8-raise)
   "RUF", # (ruff-specific-rules)
@@ -121,8 +120,7 @@ extend-select = [
   "TID", # (flake8-tidy-imports)
   "YTT", # (flake8-2020)
 ]
-ignore = ["Q000", "T201"]
-# ignore = ["Q000", "Q003", "FBT001", "FBT002", "ARG002", "FBT003"]
+ignore = ["Q000", "T201", "FBT001", "FBT002"]
 
 [tool.ruff.lint.isort]
 force-single-line = true
