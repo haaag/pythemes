@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: 2024-present haaag <git.haaag@gmail.com>
-#
-# SPDX-License-Identifier: MIT
 from __future__ import annotations
 
 import argparse
@@ -21,7 +18,7 @@ from dataclasses import field
 from pathlib import Path
 
 __appname__ = 'pythemes'
-__version__ = 'v0.1.0'
+__version__ = 'v0.1.1'
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +31,7 @@ APP_ROOT = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
 APP_HOME = APP_ROOT / __appname__.lower()
 APPS: dict[str, App] = {}
 THEMES: dict[str, Theme] = {}
+PROGRAMS_RESTART: list[str] = []
 HELP = textwrap.dedent(
     f"""usage: {__appname__} [-h] [-m MODE] [-l] [-d] [-c] [-v] [--verbose] [theme]
 
@@ -74,6 +72,37 @@ def expand_homepaths(command: str) -> str:
             continue
         cmds[i] = Path(c).expanduser().as_posix()
     return ' '.join(cmds)
+
+
+def parse_restart(p: configparser.ConfigParser):
+    section = 'restart'
+    for c in p.get(section, 'cmd').split():
+        add_program(c)
+
+
+def parse_wallpaper(p: configparser.ConfigParser, data: dict[str, dict[str, str]]):
+    section = 'wallpaper'
+    data[section] = {
+        'light': p.get(section, 'light'),
+        'dark': p.get(section, 'dark'),
+        'random': p.get(section, 'random'),
+        'cmd': p.get(section, 'cmd'),
+    }
+
+
+def parse_programs(section: str, p: configparser.ConfigParser, data: dict[str, dict[str, str]]):
+    data[section] = {
+        'file': p.get(section, 'file', fallback=''),
+        'query': p.get(section, 'query', fallback=''),
+        'light': p.get(section, 'light'),
+        'dark': p.get(section, 'dark'),
+        'cmd': p.get(section, 'cmd', fallback=''),
+    }
+
+
+def add_program(s: str) -> None:
+    if s not in PROGRAMS_RESTART:
+        PROGRAMS_RESTART.append(s)
 
 
 @dataclass
@@ -303,31 +332,24 @@ class FileManager:
         parser = configparser.ConfigParser()
         parser.read(filepath)
 
-        data = {}
+        data: dict[str, dict[str, str]] = {}
 
         logger.debug(f'reading {filepath.name!r}')
 
         try:
             for section in parser.sections():
                 if section == 'wallpaper':
-                    data[section] = {
-                        'light': parser.get(section, 'light'),
-                        'dark': parser.get(section, 'dark'),
-                        'random': parser.get(section, 'random'),
-                        'cmd': parser.get(section, 'cmd'),
-                    }
+                    parse_wallpaper(parser, data)
                     continue
 
-                data[section] = {
-                    'file': parser.get(section, 'file', fallback=''),
-                    'query': parser.get(section, 'query', fallback=''),
-                    'light': parser.get(section, 'light'),
-                    'dark': parser.get(section, 'dark'),
-                    'cmd': parser.get(section, 'cmd', fallback=''),
-                }
+                if section == 'restart':
+                    parse_restart(parser)
+                    continue
+                parse_programs(section, parser, data)
         except configparser.NoOptionError as err:
             msg_err = f'reading {filepath.name!r}: {err}'
             log_error_and_exit(msg_err)
+
         return data
 
     @staticmethod
@@ -401,9 +423,8 @@ class Process:
 
 class AppManager:
     @staticmethod
-    def reload(name: str) -> None:
-        process_id = Process.pid(name)
-        Process.send_signal(process_id, signal.SIGUSR1)
+    def reload(s: str) -> None:
+        return Process.send_signal(Process.pid(s), signal.SIGUSR1)
 
 
 def find(query: str, list_strings: list[str]) -> tuple[int, str]:
@@ -477,14 +498,6 @@ def parse_and_exit(args: argparse.Namespace) -> None:
         log_error_and_exit('no theme specified')
 
 
-def restart_dwm() -> None:
-    Process.send_signal(Process.pid('dwm'), signal.SIGUSR1)
-
-
-def restart_st() -> None:
-    Process.send_signal(Process.pid('st'), signal.SIGUSR1)
-
-
 def main() -> int:
     setup = Setup()
     args = setup.args()
@@ -530,12 +543,14 @@ def main() -> int:
     for cmd in theme.cmds:
         cmd.load(args.mode, args.confirm)
 
+    # reload programs
+    if args.confirm and len(PROGRAMS_RESTART) > 0:
+        for prog in PROGRAMS_RESTART:
+            AppManager.reload(prog)
+
     if not args.confirm:
         print(f'\nfor update, use {GREEN.format('--confirm')}')
 
-    if args.confirm:
-        restart_dwm()
-        restart_st()
     return 0
 
 
