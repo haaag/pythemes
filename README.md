@@ -24,21 +24,24 @@ pip install pythemes
 
 ### File prototype
 
-```json
-{
-  "bat": {
-    "file": "~/.zshenv",
-    "line": "BAT_THEME=",
-    "name": "Catppuccin-latte"
-  },
-  "fzf": "$DOTFILES/fzf/themes/catppuccin-latte.fzf",
-  "gtk2": "Pop",
-  "gtk3": "Pop",
-  "rofi": {
-    "file": "~/.config/rofi/config.rasi",
-    "line": "@theme",
-    "theme": "catppuccin-latte"
-  },
-  "xresources": "CATPPUCCIN_LATTE"
-}
+```dosini
+[wallpaper]
+light=~/dls/wallpapers/wallpaper-light.png
+dark=~/dls/wallpapers/wallpaper-dark.png
+random=~/dls/wallpapers/
+cmd=nitrogen --save --set-zoom-fill
+
+[xresources]
+file=~/.config/X11/settings/theme.xresources
+query=#define CURRENT_THEME {theme}
+light=GRUVBOX_LIGHT_MEDIUM
+dark=GRUVBOX_DARK_MEDIUM
+cmd=xrdb -load ~/.config/X11/xresources
+
+[fzf]
+file=~/dot/fzf/themes/current.fzf
+query=source "$DOTFILES/fzf/themes/{theme}.fzf"
+light=gruvbox-light
+dark=gruvbox-dark
+cmd=
 ```
