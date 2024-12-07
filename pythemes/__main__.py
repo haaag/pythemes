@@ -21,17 +21,21 @@ from dataclasses import field
 from pathlib import Path
 
 __appname__ = 'pythemes'
-__version__ = 'v0.0.2'
+__version__ = 'v0.1.0'
 
 logger = logging.getLogger(__name__)
 
+# TODO:
+# - [X] Expand `~` in commands
+# - [ ] On `diff` shows `not updated` and `is up to date`
+
 # app
-ROOT = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
-HOME = ROOT / __appname__.lower()
+APP_ROOT = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
+APP_HOME = APP_ROOT / __appname__.lower()
 APPS: dict[str, App] = {}
 THEMES: dict[str, Theme] = {}
 HELP = textwrap.dedent(
-    f"""{__appname__} {__version__}
+    f"""usage: {__appname__} [-h] [-m MODE] [-l] [-d] [-c] [-v] [--verbose] [theme]
 
 options:
     theme           select a theme
@@ -42,7 +46,7 @@ options:
     -h, --help      print this help message
 
 locations:
-  {HOME}
+  {APP_HOME}
     """
 )
 
@@ -50,13 +54,56 @@ locations:
 GREEN = '\033[32m{}\033[0m'
 RED = '\033[31m{}\033[0m'
 BLUE = '\033[34m{}\033[0m'
-ORANGE = '\033[33m{}\033[0m'
+YELLOW = '\033[33m{}\033[0m'
+MAGENTA = '\033[35m{}\033[0m'
 CYAN = '\033[36m{}\033[0m'
 
 
 def log_error_and_exit(msg: str) -> None:
     logger.error(f':{msg}:')
     sys.exit(1)
+
+
+def expand_homepaths(command: str) -> str:
+    """Parse home paths in a command string"""
+    if not command:
+        return ''
+    cmds = command.split()
+    for i, c in enumerate(cmds):
+        if not c.startswith('~'):
+            continue
+        cmds[i] = Path(c).expanduser().as_posix()
+    return ' '.join(cmds)
+
+
+@dataclass
+class Command:
+    name: str
+    light: str
+    dark: str
+    cmd: str
+
+    def get_mode(self, mode: str) -> str:
+        return self.light if mode == 'light' else self.dark
+
+    def load(self, mode: str, confirm: bool = False) -> None:
+        print(self, end=' ')
+        mode = self.get_mode(mode)
+        if not confirm:
+            print(YELLOW.format('not executed'))
+            return
+
+        Process.run(f'{self.cmd} {mode}')
+        print(GREEN.format('executed'))
+
+    @classmethod
+    def new(cls, data: dict[str, str]) -> Command:
+        del data['file']
+        del data['query']
+        return cls(**data)
+
+    def __str__(self) -> str:
+        return f'{MAGENTA.format("[cmd]")} {self.name}'
 
 
 @dataclass
@@ -83,10 +130,10 @@ class App:
 
     def update(self, confirm: bool) -> None:
         if not confirm:
-            print('app:', self.name, ORANGE.format('not updated'))
+            # print(self, YELLOW.format('not updated'))
             return
 
-        print('app:', self.name, BLUE.format('updated'))
+        print(self, BLUE.format('updated'))
         with self.path.open(mode='w') as f:
             f.writelines(self.lines)
 
@@ -102,7 +149,7 @@ class App:
         if not show:
             return None
         return diff_this(
-            self.name,
+            self,
             original_lines[idx : idx + 1],
             self.lines[idx : idx + 1],
         )
@@ -115,8 +162,11 @@ class App:
             query=data['query'],
             light=data['light'],
             dark=data['dark'],
-            cmd=data['cmd'],
+            cmd=expand_homepaths(data['cmd']),
         )
+
+    def __str__(self) -> str:
+        return f'{YELLOW.format('[app]')} {self.name}'
 
 
 @dataclass
@@ -126,20 +176,20 @@ class Wallpaper:
     random: Path
     cmd: str
 
-    def get_random(self) -> Path:
+    def randx(self) -> Path:
         files = list(self.random.glob('*.*'))
         return random.choice(files)  # noqa: S311
 
-    def set(self, mode: str, confirm: bool) -> None:
+    def apply(self, mode: str, confirm: bool) -> None:
         if not confirm:
-            logger.debug('confirming wallpaper not set')
+            logger.debug('wallpaper not set, use --confirm')
             return
 
         logger.debug('setting wallpaper')
         img = self.get(mode)
         if not img.is_file():
-            img = self.get_random()
-            # log_error_and_exit(f'wallpaper file={img!r} not found.')
+            logger.debug(f'wallpaper={img} is not a file, using random')
+            img = self.randx()
         logger.debug(f'setting wallpaper={img}')
         Process.run(f'{self.cmd} {img}')
 
@@ -162,15 +212,19 @@ class Wallpaper:
 class Theme:
     name: str
     apps: list[App] = field(default_factory=list)
+    cmds: list[Command] = field(default_factory=list)
     wallpaper: Wallpaper = field(init=False)
 
-    def register(self, app: App) -> None:
+    def register_app(self, app: App) -> None:
         self.apps.append(app)
+
+    def register_cmd(self, cmd: Command) -> None:
+        self.cmds.append(cmd)
 
     @staticmethod
     def file(name: str) -> Path | None:
         name = f'{name}.ini'
-        files = get_filenames(HOME)
+        files = get_filenames(APP_HOME)
         for file in files:
             if file.name == name:
                 return file
@@ -189,8 +243,24 @@ class Theme:
 
         for name, values in data.items():
             values['name'] = name
+
+            if not values.get('file') and not values.get('query'):
+                cmd = Command.new(values)
+                theme.register_cmd(cmd)
+                continue
+
+            f = values.get('file')
+            if f is None:
+                continue
+
+            filepath = Path(f).expanduser()
+
+            if not filepath.exists():
+                logger.warn(f'filepath: {filepath!s} do not exists.')
+                continue
+
             app = App.new(values)
-            theme.register(app)
+            theme.register_app(app)
 
         return theme
 
@@ -208,7 +278,7 @@ class Theme:
         return f'{BLUE.format(self.name)} theme with {apps}'
 
     def print(self) -> None:
-        print(self)
+        print(self, end='\n\n')
 
 
 class FileManager:
@@ -249,8 +319,8 @@ class FileManager:
                     continue
 
                 data[section] = {
-                    'file': parser.get(section, 'file'),
-                    'query': parser.get(section, 'query'),
+                    'file': parser.get(section, 'file', fallback=''),
+                    'query': parser.get(section, 'query', fallback=''),
                     'light': parser.get(section, 'light'),
                     'dark': parser.get(section, 'dark'),
                     'cmd': parser.get(section, 'cmd', fallback=''),
@@ -268,7 +338,7 @@ class FileManager:
 class Setup:
     @staticmethod
     def home() -> None:
-        FileManager.mkdir(HOME)
+        FileManager.mkdir(APP_HOME)
 
     @staticmethod
     def logging(debug: bool = False) -> None:
@@ -292,26 +362,10 @@ class Setup:
     def register(self, theme: Theme) -> None:
         THEMES[theme.name] = theme
 
-    def load(self, path: Path, name: str) -> None:
-        for file in path.glob('*.ini'):
-            data = FileManager.read(file)
-            if not data:
-                logger.debug(f'no data found in {file!r}')
-                continue
-
-            theme = Theme(name=file.stem)
-            theme.wallpaper = Wallpaper.new(data.pop('wallpaper'))
-
-            for name, values in data.items():
-                values['name'] = name
-                app = App.new(values)
-                theme.register(app)
-            self.register(theme)
-
 
 class Process:
     @staticmethod
-    def get_process_id(name: str) -> list[int]:
+    def pid(name: str) -> list[int]:
         logger.debug(f'getting process ids from program={name!r}')
         command = f'pidof {name}'
         bytes_pidof = subprocess.check_output(shlex.split(command))  # noqa: S603
@@ -331,23 +385,31 @@ class Process:
     @staticmethod
     def run(commands: str) -> int:
         logger.debug(f'executing from run: {commands!r}')
-        subprocess.run(
-            shlex.split(commands),
-            stderr=subprocess.DEVNULL,
-            check=False,
-            shell=False,  # noqa: S603
-        )
-        return 0
+        try:
+            proc = subprocess.run(
+                shlex.split(commands),
+                # stderr=subprocess.DEVNULL,
+                check=False,
+                shell=False,
+            )
+        except FileNotFoundError as exc:
+            err_msg = f"'{commands}': " + str(exc)
+            print(RED.format('[err] ') + err_msg)
+            return 1
+        return proc.returncode
 
 
 class AppManager:
     @staticmethod
     def reload(name: str) -> None:
-        process_id = Process.get_process_id(name)
+        process_id = Process.pid(name)
         Process.send_signal(process_id, signal.SIGUSR1)
 
 
 def find(query: str, list_strings: list[str]) -> tuple[int, str]:
+    """Finds the first match of a query in a list of strings and
+    returns the index and extracted theme value.
+    """
     pattern = re.escape(query).replace('\\{theme\\}', '(\\S+)')
     regex = re.compile(pattern)
 
@@ -363,18 +425,13 @@ def get_filenames(path: Path) -> list[Path]:
     return list(path.glob('*.ini'))
 
 
-def print_menu(options: dict[int, str]) -> None:
-    for key in options:
-        print(f'{key})', options[key])
-
-
 def print_version() -> None:
     print(f'{__appname__} {__version__}\n')
 
 
 def print_list_themes() -> None:
     print_version()
-    themes = get_filenames(HOME)
+    themes = get_filenames(APP_HOME)
     if not themes:
         print('>', 'no themes found')
         return
@@ -383,11 +440,11 @@ def print_list_themes() -> None:
     print()
 
 
-def diff_this(name: str, original: list[str], new: list[str]) -> None:
+def diff_this(app: App, original: list[str], new: list[str]) -> None:
     diff = list(difflib.unified_diff(original, new, fromfile='original', tofile='new'))
 
     if not diff:
-        print('app:', name, GREEN.format('is up to date.'))
+        print(app, GREEN.format('is up to date.'))
         return
 
     for line in diff:
@@ -420,6 +477,14 @@ def parse_and_exit(args: argparse.Namespace) -> None:
         log_error_and_exit('no theme specified')
 
 
+def restart_dwm() -> None:
+    Process.send_signal(Process.pid('dwm'), signal.SIGUSR1)
+
+
+def restart_st() -> None:
+    Process.send_signal(Process.pid('st'), signal.SIGUSR1)
+
+
 def main() -> int:
     setup = Setup()
     args = setup.args()
@@ -446,9 +511,10 @@ def main() -> int:
         theme_mode = app.get_mode(args.mode)
         next_theme = original.replace(current_theme, theme_mode)
         no_changes = original == next_theme
+
         if no_changes:
             logger.debug(f'{app.name=} no changes.')
-            print('app:', app.name, CYAN.format('no changes.'))
+            print(app, CYAN.format('no changes.'))
             continue
 
         app.replace(idx, next_theme)
@@ -459,10 +525,17 @@ def main() -> int:
         if app.cmd and args.confirm:
             Process.run(app.cmd)
 
-    theme.wallpaper.set(args.mode, args.confirm)
+    theme.wallpaper.apply(args.mode, args.confirm)
+
+    for cmd in theme.cmds:
+        cmd.load(args.mode, args.confirm)
 
     if not args.confirm:
         print(f'\nfor update, use {GREEN.format('--confirm')}')
+
+    if args.confirm:
+        restart_dwm()
+        restart_st()
     return 0
 
 
