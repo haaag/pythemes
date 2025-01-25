@@ -24,9 +24,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Documentation = "https://github.com/unknown/pythemes#readme"
-Issues = "https://github.com/unknown/pythemes/issues"
-Source = "https://github.com/unknown/pythemes"
+Documentation = "https://github.com/haaag/pythemes#readme"
+Issues = "https://github.com/haaag/pythemes/issues"
+Source = "https://github.com/haaag/pythemes"
 
 [project.scripts]
 pythemes = "pythemes.__main__:main"
@@ -42,6 +42,10 @@ test-cov = "coverage run -m pytest {args:tests}"
 cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 
+[tool.pytest.ini_options]
+pythonpath = "pythemes"
+testpaths = ["tests"]
+
 [[tool.hatch.envs.all.matrix]]
 python = ["3.8", "3.9", "3.10", "3.11"]
 
@@ -56,7 +60,7 @@ all = ["style", "typing"]
 
 [tool.ruff]
 fix = false
-line-length = 120
+line-length = 80
 # output-format = "full"
 show-fixes = true
 target-version = "py37"
