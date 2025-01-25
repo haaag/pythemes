@@ -38,10 +38,11 @@ locations:
 ```
 
 ### 🎨 Apply theme/mode
+
 ```sh
 ~ $ pythemes catppuccin -m light
 > gruvbox theme with (10 apps)
- 
+
 [app] bat applied.
 [app] rofi applied.
 [app] xresources applied.
@@ -60,18 +61,47 @@ locations:
 
 
 ```
+
 ### 🎨 Apply theme/mode to single app
 
 ```sh
 ~ $ pythemes catppuccin -m light -a fzf
 [app] fzf applied.
+
+```
+
+## 📦 Installation
+
+```bash
+# Clone repository
+$ git clone "https://github.com/haaag/pythemes"
+$ cd pythemes
+
+# Create virtual environment & source
+$ python -m venv .venv & source .venv/bin/activate
+
+# Install
+(.venv) $ pip install .
+```
+
+- Using [`uv`](https://github.com/astral-sh/uv) to install tool: <sub>(recommended)</sub>
+
+```sh
+~ $ cd /path/to/cloned/pythemes
+~ $ uv tool install .
+```
+
+- Using [`pipx`](https://github.com/pypa/pipx) to install tool:
+
+```sh
+~ $ pipx install /path/to/cloned/pythemes
 ```
 
 ## 📝 Theme file
 
 The theme file, is an `INI` file that has 3 sections for now.
 
-- <b>program:</b>  section for programs settings
+- <b>program:</b> section for programs settings
 - <b>wallpaper:</b> section for wallpapers settings
 - <b>restart:</b> section for restart settings
 
@@ -106,7 +136,8 @@ cmd:      commands that will receive the signal SIGUSR1
 ```
 
 ### 📝 Example
- This is a example INI file for pythemes. 
+
+This is a example INI file for pythemes.
 
 You can find the complete example [here](https://raw.githubusercontent.com/haaag/pythemes/refs/heads/master/example/gruvbox.ini?token=GHSAT0AAAAAAC46UJSEWLCPAKRCPRJDC6S4Z4VB3RQ)
 
