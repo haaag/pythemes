@@ -40,7 +40,7 @@ locations:
 ### 📝 Output
 ```sh
 ~ $ pythemes catppuccin -m light
-> gruvbox theme with (18 apps)
+> gruvbox theme with (10 apps)
  
 [app] bat applied.
 [app] rofi applied.
@@ -98,7 +98,10 @@ cmd:      commands that will receive the signal SIGUSR1
 ```
 
 ### 📝 Example
- This is a example INI file for pythemes
+ This is a example INI file for pythemes. 
+
+You can find the complete example [here](https://raw.githubusercontent.com/haaag/pythemes/refs/heads/master/example/gruvbox.ini?token=GHSAT0AAAAAAC46UJSEWLCPAKRCPRJDC6S4Z4VB3RQ)
+
 ```ini
 ; the script will read this file and find the `query` line and replace it with
 ; the `{theme}` value and then execute the `cmd` command if it  is set

@@ -15,14 +15,12 @@ import time
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
-from typing import TypeVar
 
 __appname__ = 'pythemes'
 __version__ = 'v0.1.3'
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
 INISection = dict[str, str]
 INIData = dict[str, INISection]
 
