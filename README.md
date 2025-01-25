@@ -37,7 +37,7 @@ locations:
   /home/$USER/.config/pythemes
 ```
 
-### 📝 Output
+### 🎨 Apply theme/mode
 ```sh
 ~ $ pythemes catppuccin -m light
 > gruvbox theme with (10 apps)
@@ -57,6 +57,14 @@ locations:
 [wal] my-dark-wallpaper.jpg setted.
 [sys] dwm restarted.
 [sys] st restarted.
+
+
+```
+### 🎨 Apply theme/mode to single app
+
+```sh
+~ $ pythemes catppuccin -m light -a fzf
+[app] fzf applied.
 ```
 
 ## 📝 Theme file
