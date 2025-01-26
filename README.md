@@ -40,7 +40,7 @@ locations:
 ### 🎨 Apply theme/mode
 
 ```sh
-~ $ pythemes catppuccin -m light
+~ $ pythemes gruvbox -m dark
 > gruvbox theme with (10 apps)
 
 [app] bat applied.
@@ -65,7 +65,7 @@ locations:
 ### 🎨 Apply theme/mode to single app
 
 ```sh
-~ $ pythemes catppuccin -m light -a fzf
+~ $ pythemes gruvbox -m dark -a fzf
 [app] fzf applied.
 
 ```
