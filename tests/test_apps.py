@@ -10,6 +10,7 @@ import pytest
 from pythemes.__main__ import App
 from pythemes.__main__ import Cmd
 from pythemes.__main__ import INISection
+from pythemes.__main__ import Setup
 from pythemes.__main__ import logger
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ def test_app_new(temp_section: INISection):
     app = App.new(temp_section, dry_run=True)
     assert app.file == 'value1.txt'
     assert app.dark == 'value2'
-    assert app.light == 'valu3'
+    assert app.light == 'value3'
     assert isinstance(app.cmd, Cmd)
 
 
@@ -41,7 +42,7 @@ def test_app_validate(valid_app: App, temp_file: Callable[..., Path]):
         ('light', '', ': no light theme specified.'),
     ],
 )
-def test_app_invalidaa(  # noqa: PLR0913
+def test_app_invalid(  # noqa: PLR0913
     valid_app: App,
     temp_file: Callable[..., Path],
     caplog: pytest.LogCaptureFixture,
@@ -49,6 +50,7 @@ def test_app_invalidaa(  # noqa: PLR0913
     value,
     log_message,
 ):
+    Setup.logging(logging.WARNING)
     invalid_app = copy.deepcopy(valid_app)
     invalid_app.file = temp_file(invalid_app.file, '').as_posix()
     # set the invalid attribute
@@ -56,6 +58,7 @@ def test_app_invalidaa(  # noqa: PLR0913
     expected_log = f'{invalid_app.name}{log_message.format(file=invalid_app.file)}'
     invalid_app.validate()
     assert invalid_app.error.occurred
+    print('>>>>>>>>>>>>>>>>>>>>>>>>', caplog.record_tuples)
     assert (logger.name, logging.WARNING, expected_log) in caplog.record_tuples
 
 
@@ -63,5 +66,5 @@ def test_app_newnew(temp_section: INISection):
     app = App.new(temp_section, dry_run=True)
     assert app.file == 'value1.txt'
     assert app.dark == 'value2'
-    assert app.light == 'valu3'
+    assert app.light == 'value3'
     assert isinstance(app.cmd, Cmd)

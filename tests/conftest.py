@@ -52,7 +52,7 @@ def temp_section() -> INISection:
         'file': 'value1.txt',
         'query': 'query {theme}',
         'dark': 'value2',
-        'light': 'valu3',
+        'light': 'value3',
         'cmd': 'value4',
     }
 
@@ -129,5 +129,6 @@ def valid_cmd() -> ModeAction:
             'light': 'gruvbox.light',
             'dark': 'gruvbox.dark',
             'cmd': 'gruvbox -r',
-        }
+        },
+        dry_run=True,
     )
