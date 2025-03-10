@@ -387,6 +387,13 @@ class Files:
         path.mkdir(exist_ok=True)
 
 
+class AppError:
+    """Represents an error in an application."""
+
+    mesg: str = ''
+    occurred: bool = False
+
+
 @dataclass
 class App:
     """
@@ -400,16 +407,11 @@ class App:
     light: str
     dark: str
     cmd: Cmd
+    dry_run: bool
+    error: AppError = field(default_factory=AppError)
     _line_idx: int = -1
     _next_theme: str = ''
     _lines: list[str] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        """
-        Initializes the instance by reading the lines from the
-        configuration file.
-        """
-        self._lines = Files.readlines(self.path)
 
     @property
     def path(self) -> Path:
@@ -421,7 +423,7 @@ class App:
         """Returns the lines read from the configuration file."""
         return self._lines
 
-    def _read_lines(self) -> None:
+    def read_lines(self) -> None:
         """
         Re-reads the lines from the configuration file and
         updates the `_lines` attribute.
@@ -441,7 +443,7 @@ class App:
 
         self.replace(self._line_idx, self._next_theme)
 
-        if SysOps.dry_run:
+        if self.dry_run:
             print(self, CYAN.format('dry run.' + END))
             return
 
@@ -461,12 +463,10 @@ class App:
         Checks if there are changes to be applied to the
         configuration file based on the mode.
         """
-        self._read_lines()
+        self.read_lines()
         idx, current_theme = find(self.query, self.lines)
         if idx == -1:
-            logger.warning(
-                f'{self.query=} not found in {self.path.as_posix()!r}.'
-            )
+            logger.error(f'{self.name}: {self.query=} not found in {self.path.as_posix()!r}.')
             return False
 
         self._line_idx = idx
@@ -489,22 +489,48 @@ class App:
     def get_mode(self, mode: str) -> str:
         """Returns the theme value for the specified mode."""
         if mode not in ('light', 'dark'):
-            logerr_exit(f'invalid mode {mode!r}')
+            logger.error(f'invalid mode {mode!r}')
+            sys.exit(1)
         return self.light if mode == 'light' else self.dark
 
+    def validate(self) -> None:
+        """Validates the application."""
+        if not self.file:
+            self.error.mesg = f'{self.name}: no file specified.'
+            self.error.occurred = True
+        if not self.dark:
+            self.error.mesg = f'{self.name}: no dark theme specified.'
+            self.error.occurred = True
+        if not self.light:
+            self.error.mesg = f'{self.name}: no light theme specified.'
+            self.error.occurred = True
+        if '{theme}' not in self.query:
+            self.error.mesg = f"{self.name}: query does not contain placeholder '{{theme}}'."
+            self.error.occurred = True
+        if not self.query:
+            self.error.mesg = f'{self.name}: no query specified.'
+            self.error.occurred = True
+        if not self.path.exists():
+            self.error.mesg = f"{self.name}: filepath '{self.path!s}' do not exists."
+            self.error.occurred = True
+
+        if self.error.occurred:
+            logger.warning(self.error.mesg)
+
     @classmethod
-    def new(cls, data: INISection) -> App:
+    def new(cls, data: INISection, dry_run: bool) -> App:
         """
         Creates a new App instance from a dictionary-like INISection object.
         """
         name = data['name']
         return cls(
             name=name,
-            file=data['file'],
-            query=data['query'],
-            light=data['light'],
-            dark=data['dark'],
-            cmd=Cmd(name, Files.expand_homepaths(data['cmd'])),
+            file=data.get('file', ''),
+            query=data.get('query', ''),
+            light=data.get('light', ''),
+            dark=data.get('dark', ''),
+            cmd=Cmd(name, Files.expand_homepaths(data.get('cmd', ''))),
+            dry_run=dry_run,
         )
 
     def __str__(self) -> str:
