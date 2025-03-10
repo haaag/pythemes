@@ -34,17 +34,19 @@ HELP = textwrap.dedent(
     f"""usage: {__appname__} [-h] [-m MODE] [-l] [-a APP] [-L] [-d] [-v] [-t] [--verbose] [theme]
 
 options:
-    theme               select a theme
-    -m, --mode          select a mode [light|dark]
-    -l, --list          list available themes
-    -a, --app           apply mode to app
-    -L, --list-apps     list available apps in theme
-    -d, --dry-run       simulate action
-    -h, --help          print this help message
+    theme               Theme name
+    -m, --mode          Select a mode [light|dark]
+    -l, --list          List available themes
+    -a, --app           Apply mode to app
+    -L, --list-apps     List available apps in theme
+    -d, --dry-run       Simulate action
+    -V, --version       Print version and exit
+    -v, --verbose       Verbose mode
+    -h, --help          Print this help message
 
 locations:
   {APP_HOME}
-    """  # noqa: E501
+    """
 )
 
 # colors
@@ -59,11 +61,6 @@ BOLD = '\033[1m{}'
 UNDERLINE = '\033[4m{}'
 ITALIC = '\033[3m{}'
 END = '\033[0m'
-
-
-def logerr_exit(msg: str) -> None:
-    logger.error(msg)
-    sys.exit(1)
 
 
 @dataclass
@@ -132,11 +129,11 @@ class INIFile:
             return None
         return dict(self.config[section])
 
-    def add(self, section: str, data: INISection) -> Self:
+    def add(self, section_name: str, data: INISection) -> Self:
         """Adds a new section to the config data."""
-        self._config.add_section(section)
+        self._config.add_section(section_name)
         for key, value in data.items():
-            self._config.set(section, key, value)
+            self._config.set(section_name, key, value)
         return self
 
 
@@ -203,6 +200,7 @@ class ModeAction:
     light: str
     dark: str
     cmd: str
+    dry_run: bool
 
     def get_mode(self, mode: str) -> str:
         """
@@ -219,7 +217,7 @@ class ModeAction:
         print(self, end=' ')
         mode = self.get_mode(mode)
 
-        if SysOps.dry_run:
+        if self.dry_run:
             print(CYAN.format('dry run.') + END)
             logger.debug(f'dry run for command={self.cmd} {mode}')
             return
@@ -228,14 +226,18 @@ class ModeAction:
         print(GREEN.format('executed.') + END)
 
     @classmethod
-    def new(cls, data: INISection) -> ModeAction:
+    def new(cls, data: INISection, dry_run: bool) -> ModeAction:
         """
         Creates a new ModeAction instance from a dictionary-like INISection
         object.
         """
-        del data['file']
-        del data['query']
-        return cls(**data)
+        return cls(
+            name=data['name'],
+            light=data['light'],
+            dark=data['dark'],
+            cmd=data['cmd'],
+            dry_run=dry_run,
+        )
 
     def __str__(self) -> str:
         return f'{BOLD.format(MAGENTA.format("[cmd]"))}{END} {self.name}'
@@ -446,7 +448,7 @@ class App:
         self.read_lines()
         idx, current_theme = find(self.query, self.lines)
         if idx == -1:
-            logger.error(f'{self.name}: {self.query=} not found in {self.path.as_posix()!r}.')
+            logger.warning(f'{self.name}: {self.query=} not found in {self.path.as_posix()!r}.')
             return False
 
         self._line_idx = idx
@@ -494,9 +496,6 @@ class App:
             self.error.mesg = f"{self.name}: filepath '{self.path!s}' do not exists."
             self.error.occurred = True
 
-        if self.error.occurred:
-            logger.warning(self.error.mesg)
-
     @classmethod
     def new(cls, data: INISection, dry_run: bool) -> App:
         """
@@ -514,7 +513,10 @@ class App:
         )
 
     def __str__(self) -> str:
-        return f'{BOLD.format(YELLOW.format("[app]"))}{END} {self.name}'
+        color = YELLOW
+        if self.error.occurred:
+            color = RED
+        return f'{BOLD.format(color.format("[app]"))}{END} {self.name}'
 
 
 @dataclass
@@ -563,7 +565,7 @@ class Wallpaper:
         logger.debug(f'setting wallpaper={path!s}')
         SysOps.run(f'{self.cmd} {path}')
 
-        print(BLUE.format('setted.' + END))
+        print(BLUE.format('set.' + END))
 
     def get(self, mode: str, fallback: Path) -> Path:
         """
@@ -638,14 +640,14 @@ class Theme:
         if self.inifile.data.get('wallpaper', False):
             self.wallpaper = Wallpaper.new(
                 self.inifile.data.pop('wallpaper'),
-                dry_run=SysOps.dry_run,
+                dry_run=self.dry_run,
             )
 
         for name, values in self.inifile.data.items():
             values['name'] = name
 
             if not values.get('file') and not values.get('query'):
-                cmd = ModeAction.new(values)
+                cmd = ModeAction.new(values, dry_run=self.dry_run)
                 self.register_cmd(cmd)
                 continue
 
@@ -657,13 +659,27 @@ class Theme:
             app.validate()
             self.register_app(app)
 
+    def get(self, appname: str) -> App | None:
+        """Retrieves an app by its name."""
+        section = self.inifile.get(appname)
+        if not section:
+            return None
+        section['name'] = appname
+        app = App.new(section, dry_run=self.dry_run)
+        app.validate()
+        return app
+
+    def errors(self) -> int:
+        """Returns the total number of errors in the theme."""
+        return sum(app.error.occurred for app in self.apps.values())
+
+    def print(self) -> None:
+        print(f'> {self}', end='\n\n')
+
     def __str__(self) -> str:
         apps = RED.format(f'({len(self.apps)} apps)')
         s = f'{BLUE.format(self.name)}{END} theme with {apps}'
         return f'{BOLD.format(UNDERLINE.format(s))}{END}'
-
-    def print(self) -> None:
-        print(f'> {self}', end='\n\n')
 
 
 class SysOps:
@@ -691,7 +707,7 @@ class SysOps:
                 logger.debug('sending signal=%s to pid=%s', signal, pid)
                 os.kill(pid, signal)
         except OSError as err:
-            logerr_exit(str(err))
+            raise err
 
     @staticmethod
     def run(commands: str) -> int:
@@ -786,8 +802,8 @@ def print_list_apps(t: str | None) -> int:
         logger.error('no theme specified')
         return 1
 
-    file = Theme.file(t)
-    if not file:
+    fn = get_filetheme(t)
+    if not fn:
         logger.error(f'theme={t} not found')
         return 1
 
@@ -797,27 +813,28 @@ def print_list_apps(t: str | None) -> int:
     n = RED.format(f'({len(theme.apps)} apps)')
     print(f'{BLUE.format(t)}{END} theme with {n}\n')
 
-    for app in themes.apps.values():
+    for app in theme.apps.values():
         print(app)
 
     return 0
 
 
-def get_app(t: str | None, s: str) -> App | None:
+def get_app(t: str | None, appname: str) -> App | None:
     """Returns an App object for a given theme and app name."""
     if not t:
         logger.error('no theme specified')
         return None
 
-    file = Theme.file(t)
-    if not file:
+    fn = get_filetheme(t)
+    if not fn:
         logger.error(f"theme='{t}' not found")
         return None
 
-    themes = Theme.load(file)
-    app = themes.apps.get(s)
+    ini = INIFile(fn).read().parse()
+    theme = Theme(t, ini, dry_run=SysOps.dry_run)
+    app = theme.get(appname)
     if not app:
-        logger.error(f"app='{s}' not found")
+        logger.error(f"app='{appname}' not found")
         return None
 
     return app
@@ -854,25 +871,20 @@ def parse_and_exit(args: argparse.Namespace) -> None:
 
     if not args.theme:
         print(HELP)
-        logerr_exit('no theme specified')
-
-
-def process_theme(theme: str) -> Theme:
-    """Process a theme and return a Theme object."""
-    filename = Theme.file(theme)
-    if not filename:
-        logger.error(f'theme={theme!r} not found')
-        print()
-        print_list_themes()
-        sys.exit(1)
-
-    return Theme.load(filename)
+        sys.exit(0)
 
 
 def process_app(app: App, mode: str | None) -> None:
     """Process an app and update it if needed."""
     if not mode:
-        logger.error('no mode specified (dark|light)')
+        logger.warning('no mode specified (dark|light)')
+        return
+    if app.error.occurred:
+        logger.warning(app.error.mesg)
+        print(app, RED.format('err.' + END))
+        return
+    if app.dry_run:
+        print(app, ITALIC.format(CYAN.format('dry run.')) + END)
         return
     if not app.has_changes(mode):
         print(app, ITALIC.format(GRAY.format('no changes needed.')) + END)
@@ -892,22 +904,20 @@ class Setup:
         args = Setup.args()
         Setup.logging(args.verbose)
         Files.mkdir(path)
+        SysOps.dry_run = args.dry_run
         logging.debug(vars(args))
         parse_and_exit(args)
-
-        SysOps.dry_run = args.dry_run
 
         return args
 
     @staticmethod
-    def logging(debug: bool = False) -> None:
+    def logging(verbose: int) -> None:
         """
         Configures the logging format and level based on the debug flag.
         """
-        logging_format = (
-            '[{levelname:^7}] {name:<30}: {message} (line:{lineno})'
-        )
-        level = logging.DEBUG if debug else logging.ERROR
+        logging_format = '[{levelname:^7}] {name:<30}: {message} (line:{lineno})'
+        levels = [logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
+        level = levels[min(verbose, len(levels) - 1)]
         logging.basicConfig(
             level=level,
             format=logging_format,
@@ -930,16 +940,33 @@ class Setup:
         parser.add_argument('-a', '--app', type=str)
         parser.add_argument('-L', '--list-apps', action='store_true')
         parser.add_argument('-d', '--dry-run', action='store_true')
-        parser.add_argument('-v', '--version', action='store_true')
+        parser.add_argument('-V', '--version', action='store_true')
         parser.add_argument('-h', '--help', action='store_true')
         parser.add_argument('-t', '--test', action='store_true')
-        parser.add_argument('--verbose', action='store_true')
+        parser.add_argument('-v', '--verbose', action='count', default=0)
         return parser.parse_args()
+
+
+def get_filetheme(name: str) -> Path | None:
+    themes = get_filenames(APP_HOME)
+    for t in themes:
+        if t.stem == name:
+            return t
+    return None
 
 
 def main() -> int:
     args = Setup.init(APP_HOME)
-    theme = process_theme(args.theme)
+    fn = get_filetheme(args.theme)
+    if not fn:
+        logger.warning(f'{args.theme} not found')
+        print('Themes found:')
+        print_list_themes()
+        return 1
+
+    ini = INIFile(fn)
+    theme = Theme(args.theme, ini, dry_run=args.dry_run)
+    theme.parse_apps()
     theme.print()
 
     mode = args.mode
@@ -947,6 +974,8 @@ def main() -> int:
 
     for app in theme.apps.values():
         process_app(app, mode)
+        if app.error.occurred:
+            continue
         # commands apps
         c.add(app)
 
@@ -961,15 +990,18 @@ def main() -> int:
         if c.has_cmds():
             c.run()
 
-        theme.wallpaper.set(mode)
+        # set wallpaper
+        if theme.wallpaper.has:
+            theme.wallpaper.set(mode)
 
         # reload programs
         for p in PROGRAMS_RESTART:
             SysOps.restart(p)
 
-        print(
-            f'\n> {BOLD.format(BLUE.format(theme.updates)) + END} apps updated'
-        )
+        print(f'\n> {BOLD.format(BLUE.format(theme.updates)) + END} apps updated')
+        errs = theme.errors()
+        if errs:
+            print(f'> {BOLD.format(RED.format(errs)) + END} apps with errors')
     else:
         print('\n> no apps updated')
 

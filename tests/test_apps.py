@@ -7,7 +7,7 @@ from typing import Callable
 
 import pytest
 
-from pythemes.__main__ import App
+from pythemes.__main__ import App, process_app
 from pythemes.__main__ import Cmd
 from pythemes.__main__ import INISection
 from pythemes.__main__ import Setup
@@ -57,8 +57,8 @@ def test_app_invalid(  # noqa: PLR0913
     setattr(invalid_app, attr, value)
     expected_log = f'{invalid_app.name}{log_message.format(file=invalid_app.file)}'
     invalid_app.validate()
+    process_app(invalid_app, 'dark')
     assert invalid_app.error.occurred
-    print('>>>>>>>>>>>>>>>>>>>>>>>>', caplog.record_tuples)
     assert (logger.name, logging.WARNING, expected_log) in caplog.record_tuples
 
 

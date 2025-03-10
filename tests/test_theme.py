@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
+from pythemes.__main__ import INISection
 from tests.conftest import THEME_NAME
 
 if TYPE_CHECKING:
@@ -41,3 +42,12 @@ def test_theme_register(theme: Theme, valid_app: App, valid_cmd: ModeAction):
     for _ in range(toappend):
         theme.register_cmd(valid_cmd)
     assert len(theme.cmds) == toappend
+
+
+def test_theme_errors(theme: Theme, temp_section: INISection):
+    expected_errors = 3
+    assert theme.errors() == 0
+    for i in range(expected_errors):
+        theme.inifile.add(f'invalid_section_{i}', temp_section)
+    theme.parse_apps()
+    assert theme.errors() == expected_errors
