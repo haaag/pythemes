@@ -63,6 +63,14 @@ repos:
     hooks:
       - id: gitleaks
 
+  # Test
+  - repo: https://github.com/christophmeissner/pytest-pre-commit
+    rev: 1.0.0
+    hooks:
+      - id: pytest
+        pass_filenames: false
+        always_run: true
+
   # - repo: https://github.com/asottile/dead
   #   rev: v1.5.2
   #   hooks:
