@@ -186,8 +186,8 @@ def parse_raw_program(section: str, p: configparser.ConfigParser, data: INIData)
     data[section] = {
         'file': p.get(section, 'file', fallback=''),
         'query': p.get(section, 'query', fallback=''),
-        'light': p.get(section, 'light'),
-        'dark': p.get(section, 'dark'),
+        'light': p.get(section, 'light', fallback=''),
+        'dark': p.get(section, 'dark', fallback=''),
         'cmd': p.get(section, 'cmd', fallback=''),
     }
 
