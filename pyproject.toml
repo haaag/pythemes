@@ -37,10 +37,15 @@ path = "pythemes/__main__.py"
 [tool.hatch.envs.default]
 dependencies = ["coverage[toml]>=6.5", "pytest"]
 [tool.hatch.envs.default.scripts]
+check = "mypy ."
 test = "pytest {args:tests}"
 test-cov = "coverage run -m pytest {args:tests}"
 cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
+
+[[tool.mypy.overrides]]
+module = ["pytest.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = "pythemes"
@@ -60,7 +65,7 @@ all = ["style", "typing"]
 
 [tool.ruff]
 fix = false
-line-length = 80
+line-length = 100
 # output-format = "full"
 show-fixes = true
 target-version = "py37"

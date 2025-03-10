@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+from typing import Self
 
 __appname__ = 'pythemes'
 __version__ = 'v0.1.3'
@@ -72,38 +73,71 @@ class INIFile:
     methods to read and parse its contents.
     """
 
-    _filepath: Path
-    ext: str = 'ini'
+    path: Path
+    _data: INIData = field(default_factory=dict)
+    _config: configparser.ConfigParser = field(default_factory=configparser.ConfigParser)
+
+    def __post_init__(self):
+        if not self.path.exists():
+            err_msg = f'INI file path {self.path.name!r} not found.'
+            raise FileNotFoundError(err_msg)
 
     @property
     def filepath(self) -> Path:
         """Returns the path to the INI file as a `Path` object."""
-        return Path(self._filepath)
+        return Path(self.path)
 
-    def parse(self, p: configparser.ConfigParser) -> INIData:
-        """
-        Parses the contents of a `ConfigParser` object
-        into a dictionary-like structure.
-        """
-        data: INIData = {}
-        try:
-            for section in p.sections():
-                parse_restart(p)
-                parse_wallpaper(p, data)
-                parse_programs(section, p, data)
-        except configparser.NoOptionError as err:
-            logerr_exit(f'reading {self.filepath.name!r}: {err}')
-        return data
+    @property
+    def data(self) -> INIData:
+        """Returns the parsed data from the INI file."""
+        return self._data
 
-    def read(self) -> configparser.ConfigParser:
+    @property
+    def config(self) -> configparser.ConfigParser:
+        """Returns the `ConfigParser` object used to read the INI file."""
+        return self._config
+
+    def parse(self) -> Self:
         """
-        Reads the INI file and returns a `ConfigParser` object containing
-        its data.
+        Parses the contents of a `ConfigParser` object into a dictionary-like structure.
+        """
+        for section in self.config.sections():
+            try:
+                parse_restart(self.config)
+                parse_wallpaper(self.config, self._data)
+                parse_raw_program(section, self.config, self._data)
+            except configparser.NoOptionError as err:
+                logger.warning(f'reading {self.filepath.name!r}: {err}')
+                continue
+
+        return self
+
+    def read(self) -> Self:
+        """
+        Reads the INI file and populates the config attribute with its data.
         """
         if not self.filepath.exists():
-            logerr_exit(f'INI file path {self.filepath.name!r} not found.')
+            err_msg = f'INI file path {self.filepath.name!r} not found.'
+            raise FileNotFoundError(err_msg)
 
-        return configparser.ConfigParser()
+        self._config.read(self.filepath, encoding='utf-8')
+        if not self.config.sections():
+            errmsg = f'No sections found in {self.filepath.name!r}.'
+            raise configparser.NoSectionError(errmsg)
+        return self
+
+    def get(self, section: str) -> INISection | None:
+        """Returns the section of the INI file with the given name."""
+        if not self.config.has_section(section):
+            return None
+        return dict(self.config[section])
+
+    def add(self, section: str, data: INISection) -> Self:
+        """Adds a new section to the config data."""
+        self._config.add_section(section)
+        for key, value in data.items():
+            self._config.set(section, key, value)
+        return self
 
 
 def parse_restart(p: configparser.ConfigParser) -> None:
@@ -140,9 +174,7 @@ def parse_wallpaper(p: configparser.ConfigParser, data: INIData) -> None:
     p.remove_section(s)
 
 
-def parse_programs(
-    section: str, p: configparser.ConfigParser, data: INIData
-) -> None:
+def parse_raw_program(section: str, p: configparser.ConfigParser, data: INIData) -> None:
     """
     Parses a program section from a `ConfigParser` object and adds
     the program configuration to the `data` dictionary.
@@ -560,9 +592,10 @@ class Theme:
     """
 
     name: str
+    inifile: INIFile
+    dry_run: bool
     apps: dict[str, App] = field(default_factory=dict)
     cmds: list[ModeAction] = field(default_factory=list)
-    dry_run: bool = False
     wallpaper: Wallpaper = field(init=False)
     updates: int = 0
 
@@ -580,65 +613,34 @@ class Theme:
         """Checks if the theme has any updates."""
         return self.updates > 0
 
-    @staticmethod
-    def file(name: str) -> Path | None:
-        """
-        Searches for a theme file by name in the application home directory.
-        """
-        name = f'{name}.ini'
-        files = get_filenames(APP_HOME)
-        for file in files:
-            if file.name == name:
-                return file
-        return None
-
-    @staticmethod
-    def load(file: Path) -> Theme:
-        """
-        Loads a theme from a file and initializes its apps, commands, and
-        wallpaper settings.
-        """
-        data = Files.read_ini(file)
-        if not data:
-            msg_err = f'no data found in {file!r}'
+    def parse_apps(self) -> None:
+        self.inifile.read().parse()
+        if not self.inifile.data:
+            msg_err = f'no data found in {self.inifile.filepath!r}'
             logger.debug(msg_err)
             raise ValueError(msg_err)
 
-        theme = Theme(name=file.stem)
-        theme.wallpaper = Wallpaper.new(data.pop('wallpaper'))
+        if self.inifile.data.get('wallpaper', False):
+            self.wallpaper = Wallpaper.new(
+                self.inifile.data.pop('wallpaper'),
+                dry_run=SysOps.dry_run,
+            )
 
-        for name, values in data.items():
+        for name, values in self.inifile.data.items():
             values['name'] = name
 
             if not values.get('file') and not values.get('query'):
                 cmd = ModeAction.new(values)
-                theme.register_cmd(cmd)
+                self.register_cmd(cmd)
                 continue
 
             f = values.get('file')
             if f is None:
                 continue
 
-            filepath = Path(f).expanduser()
-
-            if not filepath.exists():
-                logger.warn(f'filepath: {filepath!s} do not exists.')
-                continue
-
-            app = App.new(values)
-            theme.register_app(app)
-
-        return theme
-
-    @staticmethod
-    def get(s: str) -> Theme:
-        """Retrieves a theme by name from the application home directory."""
-        filename = Theme.file(s)
-        if not filename:
-            logger.error(f'theme={s!r} not found')
-            sys.exit(1)
-
-        return Theme.load(filename)
+            app = App.new(values, dry_run=self.dry_run)
+            app.validate()
+            self.register_app(app)
 
     def __str__(self) -> str:
         apps = RED.format(f'({len(self.apps)} apps)')
@@ -762,8 +764,10 @@ def print_list_apps(t: str | None) -> int:
         logger.error(f'theme={t} not found')
         return 1
 
-    themes = Theme.load(file)
-    n = RED.format(f'({len(themes.apps)} apps)')
+    inifile = INIFile(fn)
+    theme = Theme(t, inifile, dry_run=SysOps.dry_run)
+    theme.parse_apps()
+    n = RED.format(f'({len(theme.apps)} apps)')
     print(f'{BLUE.format(t)}{END} theme with {n}\n')
 
     for app in themes.apps.values():
