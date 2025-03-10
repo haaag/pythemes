@@ -308,36 +308,13 @@ class Files:
     manipulating file paths
     """
 
-    dry_run: bool = False
-
-    @staticmethod
-    def read_ini(filepath: Path) -> INIData:
-        """Reads and parses an INI file into a dictionary-like structure."""
-        if not filepath.exists():
-            logerr_exit(f'INI file path {filepath.name!r} not found.')
-
-        parser = configparser.ConfigParser()
-        parser.read(filepath)
-
-        data: INIData = {}
-
-        logger.debug(f'reading {filepath.name!r}')
-
-        try:
-            for section in parser.sections():
-                parse_wallpaper(parser, data)
-                parse_restart(parser)
-                parse_programs(section, parser, data)
-        except configparser.NoOptionError as err:
-            logerr_exit(f'reading {filepath.name!r}: {err}')
-
-        return data
-
     @staticmethod
     def readlines(f: Path) -> list[str]:
         """Reads all lines from a file and returns them as a list of strings."""
         if not f.exists():
-            logerr_exit(f'file {f.name!r} not found')
+            err_msg = f"file '{f}' does not exist."
+            logger.error(err_msg)
+            raise FileNotFoundError(err_msg)
 
         with f.open(mode='r') as file:
             return file.readlines()
@@ -352,18 +329,21 @@ class Files:
             file.writelines(lines)
 
     @staticmethod
-    def get_path(file: str) -> Path:
+    def get_path(f: str) -> Path:
         """
         Expands a file path (including '~' for the home directory) and
         returns it as a Path object.
         """
-        return Path(file).expanduser()
+        return Path(f).expanduser()
 
     @staticmethod
     def expand_homepaths(command: str) -> str:
         """Expands '~' in a command string to the full home directory path."""
+        if '~' not in command:
+            return command
         if not command:
             return ''
+
         cmds = command.split()
         for i, c in enumerate(cmds):
             if not c.startswith('~'):
@@ -377,10 +357,10 @@ class Files:
         Creates a directory at the specified path if it does not already exist.
         """
         if path.is_file():
-            logerr_exit(f'{path=} is a file. aborting...')
-
+            err_msg = f'Cannot create directory: {path!s} is a file.'
+            raise IsADirectoryError(err_msg)
         if path.exists():
-            logger.debug(f'path={path.as_posix()!r} already exists')
+            logger.debug(f'path={path!s} already exists')
             return
 
         logger.info(f'creating {path=}')
