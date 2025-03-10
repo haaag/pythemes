@@ -528,6 +528,8 @@ class Wallpaper:
     light: Path
     random: Path
     cmd: str
+    dry_run: bool
+    has: bool = False
 
     def randx(self) -> Path:
         """Randomly selects a wallpaper."""
@@ -553,7 +555,7 @@ class Wallpaper:
 
         print(self, path.name, end=' ')
 
-        if SysOps.dry_run:
+        if self.dry_run:
             print(CYAN.format('dry run.' + END))
             logger.debug(f'dry run for wallpaper={path}')
             return
@@ -563,22 +565,24 @@ class Wallpaper:
 
         print(BLUE.format('setted.' + END))
 
-    def get(self, mode: str, default: Path) -> Path:
+    def get(self, mode: str, fallback: Path) -> Path:
         """
         Retrieves the wallpaper path for the specified mode.
         If no wallpaper is set for the mode, returns the default path.
         """
-        img = self.light if mode == 'light' else self.dark
+        img: Path
+        match mode:
+            case 'light':
+                img = self.light
+            case 'dark':
+                img = self.dark
+            case _:
+                img = fallback
         logger.debug(f'wallpaper={img}')
-        if not img:
-            return default
         return img
 
-    def __str__(self) -> str:
-        return f'{BOLD.format(GREEN.format("[wal]"))}{END}'
-
     @classmethod
-    def new(cls, data: INISection) -> Wallpaper:
+    def new(cls, data: INISection, dry_run: bool) -> Wallpaper:
         """
         Creates a new Wallpaper instance from a dictionary-like INISection.
         """
@@ -587,7 +591,12 @@ class Wallpaper:
             light=Files.get_path(data['light']),
             random=Files.get_path(data['random']),
             cmd=data['cmd'],
+            dry_run=dry_run,
+            has=True,
         )
+
+    def __str__(self) -> str:
+        return f'{BOLD.format(GREEN.format("[wal]"))}{END}'
 
 
 @dataclass
