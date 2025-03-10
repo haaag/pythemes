@@ -732,6 +732,18 @@ def find(query: str, list_strings: list[str]) -> tuple[int, str]:
     """Finds the first match of a query in a list of strings and
     returns the index and extracted theme value.
     """
+    if len(list_strings) == 0:
+        logger.warning('list of strings is empty.')
+        return -1, ''
+
+    if not query:
+        logger.warning('query is empty.')
+        return -1, ''
+
+    if '{theme}' not in query:
+        logger.warning('query does not contain placeholder {theme}.')
+        return -1, ''
+
     pattern = re.escape(query).replace('\\{theme\\}', '(\\S+)')
     regex = re.compile(pattern)
 
