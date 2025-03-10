@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Self
 
 __appname__ = 'pythemes'
-__version__ = 'v0.1.3'
+__version__ = 'v0.1.4'
 
 logger = logging.getLogger(__name__)
 
