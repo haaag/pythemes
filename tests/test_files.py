@@ -30,7 +30,11 @@ def test_file_mkdir_error(temp_file: Callable[..., Path]):
         ('ls -la', 'ls -la', 'ls'),
         ('echo ~', 'echo /home/user', 'tilde'),
         ('cat ~/.config/file.txt', 'cat /home/user/.config/file.txt', 'single expansion'),
-        ('echo ~ && cd ~/projects', 'echo /home/user && cd /home/user/projects', 'doble expansion'),
+        (
+            'echo ~ && cd ~/projects',
+            'echo /home/user && cd /home/user/projects',
+            'double expansion',
+        ),
         ('rm -rf ~/temp ~/backup', 'rm -rf /home/user/temp /home/user/backup', 'multiple paths'),
         ("echo '~' 'hello'", "echo '~' 'hello'", 'Quoted tilde should not expand'),
     ],
@@ -46,8 +50,10 @@ def test_files_readlines(ini_filepath: Path):
     assert len(text) == len(Files.readlines(ini_filepath))
 
 
-# def test_files_readlines_filenotfound(init
-#
+def test_files_readlines_filenotfound():
+    f = Path('/nonexistent/file.ini')
+    with pytest.raises(FileNotFoundError):
+        Files.readlines(f)
 
 
 def test_files_savelines(temp_empty_file: Callable[..., Path]):

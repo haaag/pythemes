@@ -39,9 +39,9 @@ options:
     -l, --list          List available themes
     -a, --app           Apply mode to app
     -L, --list-apps     List available apps in theme
-    -d, --dry-run       Simulate action
+    -d, --dry-run       Do not make any changes
     -V, --version       Print version and exit
-    -v, --verbose       Verbose mode
+    -v, --verbose       Increase output verbosity
     -c, --color         Enable color [always|never] (default: always)
     -h, --help          Print this help message
 
@@ -208,7 +208,14 @@ class ModeAction:
         Returns the mode-specific value (light or dark)
         based on the provided mode.
         """
-        return self.light if mode == 'light' else self.dark
+        match mode:
+            case 'light':
+                return self.light
+            case 'dark':
+                return self.dark
+            case _:
+                err_msg = f'invalid mode {mode!r}'
+                raise ValueError(err_msg)
 
     def load(self, mode: str) -> None:
         """
@@ -781,6 +788,13 @@ def find(query: str, list_strings: list[str]) -> tuple[int, str]:
     return -1, ''
 
 
+def version() -> None:
+    print(f'{__appname__} {__version__}')
+
+def logme(s: str) -> None:
+    print(f'{__appname__} {__version__}: {s}')
+
+
 def get_filenames(path: Path) -> list[Path]:
     """Returns a list of all files in a directory with the extension .ini"""
     return list(path.glob('*.ini'))
@@ -860,7 +874,7 @@ def parse_and_exit(args: argparse.Namespace) -> None:
         sys.exit(0)
 
     if args.version:
-        print(f'{__appname__} {__version__}\n')
+        version()
         sys.exit(0)
 
     if args.test:
@@ -868,6 +882,8 @@ def parse_and_exit(args: argparse.Namespace) -> None:
         sys.exit(0)
 
     if args.list:
+        version()
+        print('\nThemes found:')
         print_list_themes()
         sys.exit(0)
 
@@ -883,7 +899,8 @@ def parse_and_exit(args: argparse.Namespace) -> None:
 def process_app(app: App, mode: str | None) -> None:
     """Process an app and update it if needed."""
     if not mode:
-        logger.warning('no mode specified (dark|light)')
+        logme('no mode specified (dark|light)')
+        sys.exit(1)
         return
     if app.error.occurred:
         logger.warning(app.error.mesg)
@@ -941,7 +958,7 @@ class Setup:
             add_help=False,
         )
         parser.add_argument('theme', nargs='?')
-        parser.add_argument('-m', '--mode', type=str)
+        parser.add_argument('-m', '--mode', type=str, choices=['dark', 'light'])
         parser.add_argument('-l', '--list', action='store_true')
         parser.add_argument('-a', '--app', type=str)
         parser.add_argument('-c', '--color', type=str, choices=['always', 'never'], default='always')  # noqa: E501
@@ -976,8 +993,8 @@ def main() -> int:
     args = Setup.init(APP_HOME)
     fn = get_filetheme(args.theme)
     if not fn:
-        logger.warning(f'{args.theme} not found')
-        print('Themes found:')
+        logme(f'theme={args.theme!r} not found')
+        print('\nThemes found:')
         print_list_themes()
         return 1
 
@@ -996,7 +1013,7 @@ def main() -> int:
         # commands apps
         c.add(app)
 
-        time.sleep(0.010)
+        time.sleep(0.005)
         theme.updates += 1
 
     if theme.has_updates:
