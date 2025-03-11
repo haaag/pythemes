@@ -31,7 +31,7 @@ APP_ROOT = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
 APP_HOME = APP_ROOT / __appname__.lower()
 PROGRAMS_RESTART: list[str] = []
 HELP = textwrap.dedent(
-    f"""usage: {__appname__} [-h] [-m MODE] [-l] [-a APP] [-L] [-d] [-v] [-t] [--verbose] [theme]
+    f"""usage: {__appname__} [-h] [-m MODE] [-l] [-a APP] [-L] [-d] [-v] [-c COLOR] [--verbose] [theme]
 
 options:
     theme               Theme name
@@ -42,25 +42,26 @@ options:
     -d, --dry-run       Simulate action
     -V, --version       Print version and exit
     -v, --verbose       Verbose mode
+    -c, --color         Enable color [always|never] (default: always)
     -h, --help          Print this help message
 
 locations:
-  {APP_HOME}
-    """
+  {APP_HOME}"""  # noqa: E501
 )
 
 # colors
-GREEN = '\033[32m{}'
-RED = '\033[31m{}'
-BLUE = '\033[34m{}'
-YELLOW = '\033[33m{}'
-MAGENTA = '\033[35m{}'
-CYAN = '\033[36m{}'
-GRAY = '\33[37;2m{}'
-BOLD = '\033[1m{}'
-UNDERLINE = '\033[4m{}'
-ITALIC = '\033[3m{}'
+BLUE = '\033[34m'
+CYAN = '\033[36m'
+GRAY = '\33[37m'
+GREEN = '\033[32m'
+MAGENTA = '\033[35m'
+RED = '\033[31m'
+YELLOW = '\033[33m'
 END = '\033[0m'
+# styles
+BOLD = '\033[1m'
+ITALIC = '\033[3m'
+UNDERLINE = '\033[4m'
 
 
 @dataclass
@@ -218,12 +219,12 @@ class ModeAction:
         mode = self.get_mode(mode)
 
         if self.dry_run:
-            print(CYAN.format('dry run.') + END)
+            print(colorize('dry run', ITALIC, CYAN))
             logger.debug(f'dry run for command={self.cmd} {mode}')
             return
 
         SysOps.run(f'{self.cmd} {mode}')
-        print(GREEN.format('executed.') + END)
+        print(colorize('executed', ITALIC, GREEN))
 
     @classmethod
     def new(cls, data: INISection, dry_run: bool) -> ModeAction:
@@ -240,7 +241,7 @@ class ModeAction:
         )
 
     def __str__(self) -> str:
-        return f'{BOLD.format(MAGENTA.format("[cmd]"))}{END} {self.name}'
+        return f'{colorize("[cmd]", BOLD, MAGENTA)} {self.name}'
 
 
 @dataclass
@@ -265,16 +266,16 @@ class Cmd:
         print(self, end=' ')
 
         if SysOps.dry_run:
-            print(CYAN.format('dry run.') + END)
+            print(colorize('dry run', ITALIC, CYAN))
             logger.debug(f'dry run for command={self.cmd}')
             return
 
         logger.debug(f'running command={self.cmd}')
         SysOps.run(self.cmd)
-        print(GREEN.format('executed.') + END)
+        print(colorize('executed', ITALIC, GREEN))
 
     def __str__(self) -> str:
-        return f'{BOLD.format(MAGENTA.format("[cmd]"))}{END} {self.name}'
+        return f'{colorize("[cmd]", BOLD, MAGENTA)} {self.name}'
 
 
 @dataclass
@@ -420,18 +421,18 @@ class App:
         """
         if not self._next_theme:
             logger.error(f'{self.name}: no next theme')
-            print(self, RED.format('err not updated.' + END))
+            print(self, colorize('err not updated', ITALIC, RED))
             return
 
         self.replace(self._line_idx, self._next_theme)
 
         if self.dry_run:
-            print(self, CYAN.format('dry run.' + END))
+            print(self, colorize('dry run', ITALIC, CYAN))
             return
 
         Files.savelines(self.path, self.lines)
 
-        print(self, BLUE.format('applied.' + END))
+        print(self, colorize('applied', ITALIC, BLUE))
 
     def replace(self, index: int, string: str) -> None:
         """
@@ -513,10 +514,10 @@ class App:
         )
 
     def __str__(self) -> str:
-        color = YELLOW
+        c = YELLOW
         if self.error.occurred:
-            color = RED
-        return f'{BOLD.format(color.format("[app]"))}{END} {self.name}'
+            c = RED
+        return f'{colorize("[app]", BOLD, c)} {self.name}'
 
 
 @dataclass
@@ -558,14 +559,14 @@ class Wallpaper:
         print(self, path.name, end=' ')
 
         if self.dry_run:
-            print(CYAN.format('dry run.' + END))
+            print(colorize('dry run', ITALIC, CYAN))
             logger.debug(f'dry run for wallpaper={path}')
             return
 
         logger.debug(f'setting wallpaper={path!s}')
         SysOps.run(f'{self.cmd} {path}')
 
-        print(BLUE.format('set.' + END))
+        print(colorize('set', ITALIC, BLUE))
 
     def get(self, mode: str, fallback: Path) -> Path:
         """
@@ -598,7 +599,7 @@ class Wallpaper:
         )
 
     def __str__(self) -> str:
-        return f'{BOLD.format(GREEN.format("[wal]"))}{END}'
+        return colorize('[wal]', BOLD, GREEN)
 
 
 @dataclass
@@ -677,9 +678,8 @@ class Theme:
         print(f'> {self}', end='\n\n')
 
     def __str__(self) -> str:
-        apps = RED.format(f'({len(self.apps)} apps)')
-        s = f'{BLUE.format(self.name)}{END} theme with {apps}'
-        return f'{BOLD.format(UNDERLINE.format(s))}{END}'
+        apps = colorize(f'({len(self.apps)} apps)', RED)
+        return f'{colorize(self.name, UNDERLINE, BOLD, BLUE)} theme {apps}'
 
 
 class SysOps:
@@ -689,6 +689,7 @@ class SysOps:
     """
 
     dry_run: bool = False
+    color: bool = False
 
     @staticmethod
     def pid(name: str) -> list[int]:
@@ -723,7 +724,7 @@ class SysOps:
             )
         except FileNotFoundError as exc:
             err_msg = f"'{commands}': " + str(exc)
-            print(RED.format('[err] ') + err_msg + END)
+            print(colorize('[err]', BOLD, RED), err_msg)
             return 1
         return proc.returncode
 
@@ -733,15 +734,15 @@ class SysOps:
         Restarts a program by sending a `SIGUSR1` signal to its process IDs.
         If in dry-run mode, logs the action without sending the signal.
         """
-        print(BOLD.format(BLUE.format('[sys]')) + END, s, end=' ')
+        print(colorize('[sys]', BOLD, BLUE), s, end=' ')
         pids = SysOps.pid(s)
 
         if SysOps.dry_run:
             logger.debug(f'dry run for reloading app={s} with {pids=}')
-            print(CYAN.format('dry run.') + END)
+            print(colorize('dry run', ITALIC, CYAN))
             return None
 
-        print(CYAN.format('restarted.') + END)
+        print(colorize('restarted', ITALIC, CYAN))
         return SysOps.send_signal(pids, signal.SIGUSR1)
 
     @staticmethod
@@ -787,13 +788,19 @@ def get_filenames(path: Path) -> list[Path]:
 
 def print_list_themes() -> None:
     """Prints a list of all themes in the themes directory."""
-    themes = get_filenames(APP_HOME)
-    if not themes:
+    themes_files = get_filenames(APP_HOME)
+    if not themes_files:
         print('> no themes found')
         return
 
-    for t in themes:
-        print(BOLD.format(BLUE.format('[theme]')) + END, t.stem)
+    max_len = max(len(t.stem) for t in themes_files)
+    for fn in themes_files:
+        ini = INIFile(fn)
+        theme = Theme(fn.stem, ini, dry_run=True)
+        theme.parse_apps()
+        apps = colorize(f'({len(theme.apps)} apps)', ITALIC, GRAY)
+        t = colorize('[theme]', BOLD, BLUE)
+        print(f'{t} {theme.name:<{max_len}} {apps}')
 
 
 def print_list_apps(t: str | None) -> int:
@@ -810,8 +817,7 @@ def print_list_apps(t: str | None) -> int:
     inifile = INIFile(fn)
     theme = Theme(t, inifile, dry_run=SysOps.dry_run)
     theme.parse_apps()
-    n = RED.format(f'({len(theme.apps)} apps)')
-    print(f'{BLUE.format(t)}{END} theme with {n}\n')
+    theme.print()
 
     for app in theme.apps.values():
         print(app)
@@ -881,13 +887,13 @@ def process_app(app: App, mode: str | None) -> None:
         return
     if app.error.occurred:
         logger.warning(app.error.mesg)
-        print(app, RED.format('err.' + END))
+        print(app, colorize('err', ITALIC, RED))
         return
     if app.dry_run:
-        print(app, ITALIC.format(CYAN.format('dry run.')) + END)
+        print(app, colorize('dry run', ITALIC, CYAN))
         return
     if not app.has_changes(mode):
-        print(app, ITALIC.format(GRAY.format('no changes needed.')) + END)
+        print(app, colorize('no changes', ITALIC, GRAY))
         return
     app.update()
 
@@ -905,9 +911,9 @@ class Setup:
         Setup.logging(args.verbose)
         Files.mkdir(path)
         SysOps.dry_run = args.dry_run
+        SysOps.color = args.color == 'always'
         logging.debug(vars(args))
         parse_and_exit(args)
-
         return args
 
     @staticmethod
@@ -938,6 +944,7 @@ class Setup:
         parser.add_argument('-m', '--mode', type=str)
         parser.add_argument('-l', '--list', action='store_true')
         parser.add_argument('-a', '--app', type=str)
+        parser.add_argument('-c', '--color', type=str, choices=['always', 'never'], default='always')  # noqa: E501
         parser.add_argument('-L', '--list-apps', action='store_true')
         parser.add_argument('-d', '--dry-run', action='store_true')
         parser.add_argument('-V', '--version', action='store_true')
@@ -953,6 +960,16 @@ def get_filetheme(name: str) -> Path | None:
         if t.stem == name:
             return t
     return None
+
+
+def colorize(text: str, *styles: str) -> str:
+    """Returns the given text with the specified styles applied."""
+    # https://no-color.org/
+    if os.getenv('NO_COLOR'):
+        return text
+    if not styles or not SysOps.color:
+        return text
+    return ''.join(styles) + text + END
 
 
 def main() -> int:
@@ -998,10 +1015,9 @@ def main() -> int:
         for p in PROGRAMS_RESTART:
             SysOps.restart(p)
 
-        print(f'\n> {BOLD.format(BLUE.format(theme.updates)) + END} apps updated')
-        errs = theme.errors()
-        if errs:
-            print(f'> {BOLD.format(RED.format(errs)) + END} apps with errors')
+        print(f'\n> {colorize(str(theme.updates), BOLD, BLUE)} apps updated')
+        if theme.errors():
+            print(f'> {colorize(str(theme.errors()), BOLD, RED)} apps with errors')
     else:
         print('\n> no apps updated')
 
