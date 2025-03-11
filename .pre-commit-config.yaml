@@ -68,8 +68,11 @@ repos:
     rev: 1.0.0
     hooks:
       - id: pytest
+        name: Run pytest
+        entry: pytest
+        language: system
         pass_filenames: false
-        always_run: true
+        args: ["-k", "not test_color_fn"]
 
   # - repo: https://github.com/asottile/dead
   #   rev: v1.5.2

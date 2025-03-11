@@ -89,7 +89,8 @@ def test_color_fn(name: str, text: str, styles: list[str], expected: str) -> Non
     from pythemes.__main__ import SysOps
 
     SysOps.color = True
-    assert colorize(text, *styles) == expected, f'failed for {name}'
+    got = colorize(text, *styles)
+    assert got == expected, f'failed for {name}: {expected=} {got=}'
 
 
 @pytest.mark.parametrize(
