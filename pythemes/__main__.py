@@ -791,6 +791,7 @@ def find(query: str, list_strings: list[str]) -> tuple[int, str]:
 def version() -> None:
     print(f'{__appname__} {__version__}')
 
+
 def logme(s: str) -> None:
     print(f'{__appname__} {__version__}: {s}')
 
@@ -865,32 +866,26 @@ def parse_and_exit(args: argparse.Namespace) -> None:
     if args.help:
         print(HELP)
         sys.exit(0)
-
     if args.app:
         app = get_app(args.theme, args.app)
         if not app:
             sys.exit(1)
         process_app(app, args.mode)
         sys.exit(0)
-
     if args.version:
         version()
         sys.exit(0)
-
     if args.test:
         print('testing mode...')
         sys.exit(0)
-
     if args.list:
         version()
         print('\nThemes found:')
         print_list_themes()
         sys.exit(0)
-
     if args.list_apps:
         print_list_apps(args.theme)
         sys.exit(0)
-
     if not args.theme:
         print(HELP)
         sys.exit(0)
@@ -927,8 +922,10 @@ class Setup:
         args = Setup.args()
         Setup.logging(args.verbose)
         Files.mkdir(path)
+        # globals
         SysOps.dry_run = args.dry_run
         SysOps.color = args.color == 'always'
+
         logging.debug(vars(args))
         parse_and_exit(args)
         return args
@@ -989,54 +986,69 @@ def colorize(text: str, *styles: str) -> str:
     return ''.join(styles) + text + END
 
 
-def main() -> int:
-    args = Setup.init(APP_HOME)
-    fn = get_filetheme(args.theme)
-    if not fn:
-        logme(f'theme={args.theme!r} not found')
-        print('\nThemes found:')
-        print_list_themes()
-        return 1
+def handle_missing_theme(theme_name: str) -> int:
+    """Handles the case when a theme is not found."""
+    logme(f'theme={theme_name!r} not found')
+    print('\nThemes found:')
+    print_list_themes()
+    return 1
 
-    ini = INIFile(fn)
-    theme = Theme(args.theme, ini, dry_run=args.dry_run)
+
+def initialize_theme(theme_name: str, filepath: Path, dry_run: bool) -> Theme:
+    """Initializes and parses the theme from the INI file."""
+    ini = INIFile(filepath)
+    theme = Theme(theme_name, ini, dry_run=dry_run)
     theme.parse_apps()
     theme.print()
+    return theme
 
-    mode = args.mode
-    c = Commander()
+
+def process_theme(theme: Theme, mode: str) -> None:
+    """Processes theme apps, executes commands, and handles updates."""
+    commander = Commander()
 
     for app in theme.apps.values():
         process_app(app, mode)
         if app.error.occurred:
             continue
-        # commands apps
-        c.add(app)
-
+        commander.add(app)
         time.sleep(0.005)
         theme.updates += 1
 
-    if theme.has_updates:
-        # run commands
-        for cmd in theme.cmds:
-            cmd.load(mode)
+    handle_theme_updates(theme, commander, mode)
 
-        if c.has_cmds():
-            c.run()
 
-        # set wallpaper
-        if theme.wallpaper.has:
-            theme.wallpaper.set(mode)
-
-        # reload programs
-        for p in PROGRAMS_RESTART:
-            SysOps.restart(p)
-
-        print(f'\n> {colorize(str(theme.updates), BOLD, BLUE)} apps updated')
-        if theme.errors():
-            print(f'> {colorize(str(theme.errors()), BOLD, RED)} apps with errors')
-    else:
+def handle_theme_updates(theme: Theme, commander: Commander, mode: str) -> None:
+    """Handles updates, executes commands, and restarts necessary programs."""
+    if not theme.has_updates:
         print('\n> no apps updated')
+        return
+
+    for cmd in theme.cmds:
+        cmd.load(mode)
+
+    if commander.has_cmds():
+        commander.run()
+
+    if theme.wallpaper.has:
+        theme.wallpaper.set(mode)
+
+    for program in PROGRAMS_RESTART:
+        SysOps.restart(program)
+
+    print(f'\n> {colorize(str(theme.updates), BOLD, BLUE)} apps updated')
+    if theme.errors():
+        print(f'> {colorize(str(theme.errors()), BOLD, RED)} apps with errors')
+
+
+def main() -> int:
+    args = Setup.init(APP_HOME)
+    fn = get_filetheme(args.theme)
+    if not (fn := get_filetheme(args.theme)):
+        return handle_missing_theme(args.theme)
+
+    theme = initialize_theme(args.theme, fn, args.dry_run)
+    process_theme(theme, args.mode)
 
     return 0
 
