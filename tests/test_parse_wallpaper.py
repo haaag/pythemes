@@ -13,7 +13,7 @@ class Case(NamedTuple):
     name: str
     config_data: dict[str, dict[str, str]]
     expected_data: INIData
-    expected_section: bool | type[Exception]
+    expected_section: bool
 
 
 @pytest.mark.parametrize(
@@ -77,51 +77,7 @@ def test_parse_wallpaper(name, config_data, expected_data, expected_section):
     data = {}
     parse_wallpaper(config, data)
 
-    assert data == expected_data, (
-        f"Test '{name}' failed: Unexpected parsed data"
-    )
+    assert data == expected_data, f"Test '{name}' failed: Unexpected parsed data"
     assert config.has_section('wallpaper') == expected_section, (
         f"Test '{name}' failed: Section removal check failed"
     )
-
-
-@pytest.mark.parametrize(
-    'name, config_data, expected_data, expected_section',
-    (
-        Case(
-            name='empty_field_exception',
-            config_data={
-                'wallpaper': {
-                    'dark': '/path/to/dark.jpg',
-                    'random': '/path/to/wallpapers',
-                    'cmd': 'feh --bg-scale',
-                }
-            },
-            expected_data={
-                'wallpaper': {
-                    'light': '/path/to/light.jpg',
-                    'dark': '/path/to/dark.jpg',
-                    'random': '/path/to/wallpapers',
-                    'cmd': 'feh --bg-scale',
-                }
-            },
-            expected_section=configparser.NoOptionError,
-        ),
-    ),
-)
-def test_parse_wallpaper_exception(
-    name, config_data, expected_data, expected_section
-):
-    with pytest.raises(expected_section):
-        config = configparser.ConfigParser()
-        for section, options in config_data.items():
-            config.add_section(section)
-            for key, value in options.items():
-                config.set(section, key, value)
-
-        data = {}
-        parse_wallpaper(config, data)
-
-        assert data == expected_data, (
-            f"Test '{name}' failed: Unexpected parsed data"
-        )

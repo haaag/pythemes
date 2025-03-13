@@ -72,6 +72,13 @@ class InvalidFilePathError(Exception):
     pass
 
 
+class BaseError:
+    """Represents an error"""
+
+    mesg: str = ''
+    occurred: bool = False
+
+
 @dataclass
 class INIFile:
     """
@@ -167,17 +174,16 @@ def parse_wallpaper(p: configparser.ConfigParser, data: INIData) -> None:
     the wallpaper configuration to the `data` dictionary.
     Removes the 'wallpaper' section after parsing.
     """
-    s = 'wallpaper'
-    if not p.has_section(s):
+    section = 'wallpaper'
+    if not p.has_section(section):
         return
 
-    data[s] = {
-        'light': p.get(s, 'light'),
-        'dark': p.get(s, 'dark'),
-        'random': p.get(s, 'random'),
-        'cmd': p.get(s, 'cmd'),
-    }
-    p.remove_section(s)
+    data[section] = {}
+    for opt in ['light', 'dark', 'random', 'cmd']:
+        if not p.has_option(section, opt):
+            continue
+        data[section][opt] = p.get(section, opt)
+    p.remove_section(section)
 
 
 def parse_raw_program(section: str, p: configparser.ConfigParser, data: INIData) -> None:
@@ -379,13 +385,6 @@ class Files:
         path.mkdir(exist_ok=True)
 
 
-class AppError:
-    """Represents an error in an application."""
-
-    mesg: str = ''
-    occurred: bool = False
-
-
 @dataclass
 class App:
     """
@@ -400,7 +399,7 @@ class App:
     dark: str
     cmd: Cmd | None
     dry_run: bool
-    error: AppError = field(default_factory=AppError)
+    error: BaseError = field(default_factory=BaseError)
     _line_idx: int = -1
     _next_theme: str | None = None
     _lines: list[str] = field(default_factory=list)
@@ -561,7 +560,7 @@ class Wallpaper:
     random: Path
     cmd: str
     dry_run: bool
-    has: bool = False
+    error: BaseError = field(default_factory=BaseError)
 
     def randx(self) -> Path:
         """Randomly selects a wallpaper."""
@@ -572,6 +571,9 @@ class Wallpaper:
             err_msg = f'random wallpaper path {self.random!s} is not a directory.'
             raise NotADirectoryError(err_msg)
         files = list(self.random.glob('*.*'))
+        if not files:
+            err_msg = f'no files found in random wallpaper path {self.random!s}.'
+            raise FileNotFoundError(err_msg)
         return random.choice(files)  # noqa: S311
 
     def set(self, mode: str) -> None:
@@ -587,6 +589,10 @@ class Wallpaper:
         Applies the wallpaper at the specified path. If in dry-run mode,
         logs the action without making changes.
         """
+        if self.error.occurred:
+            print(self, 'wallpaper', colorize('err', ITALIC, RED))
+            logger.warning(f'wallpaper: {self.error.mesg}')
+            return
         if not path.is_file():
             err_msg = f'wallpaper={path} is not a file'
             raise InvalidFilePathError(err_msg)
@@ -601,7 +607,7 @@ class Wallpaper:
         logger.debug(f'setting wallpaper={path!s}')
         SysOps.run(f'{self.cmd} {path}')
 
-        print(colorize('set', ITALIC, BLUE))
+        print(colorize('applied', ITALIC, BLUE))
 
     def get(self, mode: str, fallback: Path) -> Path:
         """
@@ -624,17 +630,35 @@ class Wallpaper:
         """
         Creates a new Wallpaper instance from a dictionary-like INISection.
         """
-        return cls(
-            dark=Files.get_path(data['dark']),
-            light=Files.get_path(data['light']),
-            random=Files.get_path(data['random']),
-            cmd=data['cmd'],
+        dark = data.get('dark', '')
+        light = data.get('light', '')
+        random = data.get('random', '')
+        wall = cls(
+            dark=Files.get_path(dark),
+            light=Files.get_path(light),
+            random=Files.get_path(random),
+            cmd=data.get('cmd', ''),
             dry_run=dry_run,
-            has=True,
         )
 
+        if not dark:
+            wall.error.mesg = "no 'dark' wallpaper specified."
+        if not light:
+            wall.error.mesg = "no 'light' wallpaper specified."
+        if not random:
+            wall.error.mesg = "no 'random' wallpaper specified."
+        if not wall.cmd:
+            wall.error.mesg = "no 'cmd' wallpaper specified."
+        if wall.error.mesg:
+            wall.error.occurred = True
+
+        return wall
+
     def __str__(self) -> str:
-        return colorize('[wal]', BOLD, GREEN)
+        c = GREEN
+        if self.error.occurred:
+            c = RED
+        return colorize('[wal]', BOLD, c)
 
 
 @dataclass
@@ -1041,6 +1065,12 @@ def process_theme(theme: Theme, mode: str) -> None:
 
 def handle_theme_updates(theme: Theme, commander: Commander, mode: str) -> None:
     """Handles updates, executes commands, and restarts necessary programs."""
+    n_errors = theme.errors()
+    if hasattr(theme, 'wallpaper'):
+        theme.wallpaper.set(mode)
+        if theme.wallpaper.error.occurred:
+            n_errors += 1
+
     if not theme.has_updates:
         print('\n> no apps updated')
         return
@@ -1051,15 +1081,12 @@ def handle_theme_updates(theme: Theme, commander: Commander, mode: str) -> None:
     if commander.has_cmds():
         commander.run()
 
-    if hasattr(theme, 'wallpaper') and theme.wallpaper.has:
-        theme.wallpaper.set(mode)
-
     for program in PROGRAMS_RESTART:
         SysOps.restart(program)
 
     print(f'\n> {colorize(str(theme.updates), BOLD, BLUE)} apps updated')
-    if theme.errors():
-        print(f'> {colorize(str(theme.errors()), BOLD, RED)} apps with errors')
+    if n_errors:
+        print(f'> {colorize(str(n_errors), BOLD, RED)} errors occurred')
 
 
 def main() -> int:

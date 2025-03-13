@@ -16,7 +16,7 @@ def test_theme_init(theme: Theme):
     assert theme.name == CONFIG.name
     theme.parse_apps()
     assert theme.inifile.filepath.exists()
-    assert theme.wallpaper.has
+    assert hasattr(theme, 'wallpaper')
     assert len(theme.cmds) == 1
     assert len(theme.apps) == 2  # noqa: PLR2004
 

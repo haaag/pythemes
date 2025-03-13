@@ -37,7 +37,6 @@ def test_wallpaper_new():
     assert isinstance(w.dark, Path)
     assert isinstance(w.light, Path)
     assert isinstance(w.random, Path)
-    assert w.has
 
 
 def test_wallpaper_init(temp_wall_files: dict[str, Path]):
@@ -50,7 +49,6 @@ def test_wallpaper_init(temp_wall_files: dict[str, Path]):
         dry_run=True,
     )
     assert w.dry_run
-    assert not w.has
 
 
 def test_wallpaper_randx(temp_wall: Wallpaper):
@@ -67,6 +65,14 @@ def test_wallpaper_randx_filenotefound(temp_wall: Wallpaper):
 def test_wallpaper_randx_is_a_file(temp_wall: Wallpaper):
     temp_wall.random = temp_wall.dark
     with pytest.raises(NotADirectoryError):
+        temp_wall.randx()
+
+
+def test_wallpaper_randx_no_files(temp_wall: Wallpaper, tmp_path: Path):
+    empty_dir = tmp_path / 'empty_dir'
+    empty_dir.mkdir()
+    temp_wall.random = empty_dir
+    with pytest.raises(FileNotFoundError):
         temp_wall.randx()
 
 
@@ -89,3 +95,26 @@ def test_wallaper_not_a_file_error(temp_wall: Wallpaper, temp_directory: Callabl
     somedir = temp_directory('somedir')
     with pytest.raises(InvalidFilePathError):
         temp_wall.apply(somedir)
+
+
+@pytest.mark.parametrize(
+    'key, want',
+    [
+        ('dark', "no 'dark' wallpaper specified."),
+        ('light', "no 'light' wallpaper specified."),
+        ('random', "no 'random' wallpaper specified."),
+        ('cmd', "no 'cmd' wallpaper specified."),
+    ],
+)
+def test_wallpaper_invalid_section(key: str, want: str):
+    data = {
+        'dark': 'path/to/dark.jpg',
+        'light': 'path/to/light.jpg',
+        'random': 'path/to/wallpapers',
+        'cmd': 'nitrogen --save --set-zoom-fill',
+    }
+    del data[key]
+
+    w = Wallpaper.new(data, dry_run=True)
+    assert w.error.occurred
+    assert w.error.mesg == want, f'want: {want!r}, got: {w.error.mesg!r}'
