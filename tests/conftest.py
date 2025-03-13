@@ -119,8 +119,8 @@ def temp_section(temp_file: Callable[..., Path]) -> INISection:
 
 @pytest.fixture
 def temp_ini(tmp_path):
-    def create_ini(name, content) -> Path:
-        path = tmp_path / f'{name}.ini'
+    def create_ini(filename, content) -> Path:
+        path = tmp_path / f'{filename}.ini'
         path.write_text(content)
         return path
 

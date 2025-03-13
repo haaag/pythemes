@@ -115,13 +115,9 @@ class INIFile:
         Parses the contents of a `ConfigParser` object into a dictionary-like structure.
         """
         for section in self.config.sections():
-            try:
-                parse_restart(self.config)
-                parse_wallpaper(self.config, self._data)
-                parse_raw_program(section, self.config, self._data)
-            except configparser.NoOptionError as err:
-                logger.warning(f'reading {self.filepath.name!r}: {err}')
-                continue
+            parse_restart(self.config)
+            parse_wallpaper(self.config, self._data)
+            parse_raw_program(section, self.config, self._data)
 
         return self
 
@@ -169,11 +165,7 @@ def parse_restart(p: configparser.ConfigParser) -> None:
 
 
 def parse_wallpaper(p: configparser.ConfigParser, data: INIData) -> None:
-    """
-    Parses the 'wallpaper' section from a `ConfigParser` object and adds
-    the wallpaper configuration to the `data` dictionary.
-    Removes the 'wallpaper' section after parsing.
-    """
+    """Parses the 'wallpaper' section from a `ConfigParser`."""
     section = 'wallpaper'
     if not p.has_section(section):
         return
@@ -706,7 +698,7 @@ class Theme:
         for name, values in self.inifile.data.items():
             values['name'] = name
 
-            if not values.get('file') and not values.get('query'):
+            if not values.get('file') and not values.get('query') and name != 'wallpaper':
                 cmd = ModeAction.new(values, dry_run=self.dry_run)
                 self.register_cmd(cmd)
                 continue
