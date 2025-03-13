@@ -41,7 +41,8 @@ check = "mypy ."
 test = "pytest {args:tests}"
 test-cov = "coverage run -m pytest {args:tests}"
 cov-report = ["- coverage combine", "coverage report"]
-cov = ["test-cov", "cov-report"]
+cov-html = ["- coverage combine", "coverage html"]
+cov = ["test-cov", "cov-report", "cov-html"]
 
 [[tool.mypy.overrides]]
 module = ["pytest.*"]

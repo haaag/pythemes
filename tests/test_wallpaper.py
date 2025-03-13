@@ -5,11 +5,12 @@ from typing import Callable
 
 import pytest
 
+from pythemes.__main__ import InvalidFilePathError
 from pythemes.__main__ import Wallpaper
 
 
 @pytest.fixture
-def temp_wallpaper_files(temp_directory: Callable[..., Path]) -> dict[str, Path]:
+def temp_wall_files(temp_directory: Callable[..., Path]) -> dict[str, Path]:
     path = temp_directory('wallpaper')
     darkfile = path / 'dark.jpg'
     lightfile = path / 'light.jpg'
@@ -20,18 +21,6 @@ def temp_wallpaper_files(temp_directory: Callable[..., Path]) -> dict[str, Path]
         'light': lightfile,
         'random': lightfile.parent,
     }
-
-
-@pytest.fixture
-def temp_wallpaper(temp_wallpaper_files: dict[str, Path]) -> Wallpaper:
-    f = temp_wallpaper_files
-    return Wallpaper(
-        dark=f['dark'],
-        light=f['light'],
-        random=f['random'],
-        cmd='nitrogen --save --set-zoom-fill',
-        dry_run=True,
-    )
 
 
 def test_wallpaper_new():
@@ -51,8 +40,8 @@ def test_wallpaper_new():
     assert w.has
 
 
-def test_wallpaper_init(temp_wallpaper_files: dict[str, Path]):
-    f = temp_wallpaper_files
+def test_wallpaper_init(temp_wall_files: dict[str, Path]):
+    f = temp_wall_files
     w = Wallpaper(
         dark=f['dark'],
         light=f['light'],
@@ -64,14 +53,39 @@ def test_wallpaper_init(temp_wallpaper_files: dict[str, Path]):
     assert not w.has
 
 
-def test_wallpaper_randx(temp_wallpaper: Wallpaper):
-    files = [temp_wallpaper.dark, temp_wallpaper.light]
-    assert temp_wallpaper.randx() in files
+def test_wallpaper_randx(temp_wall: Wallpaper):
+    files = [temp_wall.dark, temp_wall.light]
+    assert temp_wall.randx() in files
 
 
-def test_wallpaper_get(temp_wallpaper: Wallpaper):
-    w = temp_wallpaper
+def test_wallpaper_randx_filenotefound(temp_wall: Wallpaper):
+    temp_wall.random = Path('file/do/not/exist.jpg')
+    with pytest.raises(FileNotFoundError):
+        temp_wall.randx()
+
+
+def test_wallpaper_randx_is_a_file(temp_wall: Wallpaper):
+    temp_wall.random = temp_wall.dark
+    with pytest.raises(NotADirectoryError):
+        temp_wall.randx()
+
+
+def test_wallpaper_get(temp_wall: Wallpaper):
+    w = temp_wall
     dark = w.dark
     assert dark == w.get('dark', w.light)
     assert w.light == w.get('light', Path())
     assert w.light == w.get('unknow', w.light)
+
+
+def test_wallpaper_apply(temp_wall: Wallpaper, temp_file: Callable[..., Path]):
+    file = temp_file('tempfile.jpg', 'sometext')
+    w = temp_wall
+    w.dark = file
+    w.set('dark')
+
+
+def test_wallaper_not_a_file_error(temp_wall: Wallpaper, temp_directory: Callable[..., Path]):
+    somedir = temp_directory('somedir')
+    with pytest.raises(InvalidFilePathError):
+        temp_wall.apply(somedir)

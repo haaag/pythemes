@@ -64,6 +64,14 @@ ITALIC = '\033[3m'
 UNDERLINE = '\033[4m'
 
 
+class ThemeModeError(Exception):
+    pass
+
+
+class InvalidFilePathError(Exception):
+    pass
+
+
 @dataclass
 class INIFile:
     """
@@ -204,10 +212,6 @@ class ModeAction:
     dry_run: bool
 
     def get_mode(self, mode: str) -> str:
-        """
-        Returns the mode-specific value (light or dark)
-        based on the provided mode.
-        """
         match mode:
             case 'light':
                 return self.light
@@ -297,10 +301,10 @@ class Commander:
         """Register a new command to the collection."""
         self.cmds.append(cmd)
 
-    def add(self, a: App) -> None:
+    def add(self, app: App) -> None:
         """Add commands from an app if available."""
-        if a.has_commands():
-            self.register(a.cmd)
+        if app.cmd is not None:
+            self.register(app.cmd)
 
     def has_cmds(self) -> bool:
         """Check if there are any commands in the collection."""
@@ -349,10 +353,8 @@ class Files:
     @staticmethod
     def expand_homepaths(command: str) -> str:
         """Expands '~' in a command string to the full home directory path."""
-        if '~' not in command:
+        if '~' not in command or not command:
             return command
-        if not command:
-            return ''
 
         cmds = command.split()
         for i, c in enumerate(cmds):
@@ -396,11 +398,11 @@ class App:
     query: str
     light: str
     dark: str
-    cmd: Cmd
+    cmd: Cmd | None
     dry_run: bool
     error: AppError = field(default_factory=AppError)
     _line_idx: int = -1
-    _next_theme: str = ''
+    _next_theme: str | None = None
     _lines: list[str] = field(default_factory=list)
 
     @property
@@ -414,28 +416,25 @@ class App:
         return self._lines
 
     def read_lines(self) -> None:
-        """
-        Re-reads the lines from the configuration file and
-        updates the `_lines` attribute.
-        """
         self._lines = Files.readlines(self.path)
 
-    def update(self) -> None:
+    def update(self, mode: str) -> None:
         """
-        Updates the configuration file with the next theme value
-        if changes are detected.
+        Updates the configuration file with the next theme value if changes are detected.
         If in dry-run mode, logs the action without making changes.
         """
+        if not self.has_changes(mode):
+            print(self, colorize('no changes', ITALIC, YELLOW))
+            return
         if not self._next_theme:
             logger.error(f'{self.name}: no next theme')
             print(self, colorize('err not updated', ITALIC, RED))
             return
-
-        self.replace(self._line_idx, self._next_theme)
-
         if self.dry_run:
             print(self, colorize('dry run', ITALIC, CYAN))
             return
+
+        self.replace(self._line_idx, self._next_theme)
 
         Files.savelines(self.path, self.lines)
 
@@ -448,61 +447,84 @@ class App:
         """
         self._lines[index] = string
 
-    def has_changes(self, m: str) -> bool:
-        """
-        Checks if there are changes to be applied to the
-        configuration file based on the mode.
-        """
+    def find_current_theme(self) -> tuple[int, str | None]:
+        """Finds the current theme in the file and returns its index and value."""
         self.read_lines()
         idx, current_theme = find(self.query, self.lines)
+
         if idx == -1:
-            logger.warning(f'{self.name}: {self.query=} not found in {self.path.as_posix()!r}.')
+            self.error.mesg = (
+                f'{self.name}: query={self.query!r} not found in {self.path.as_posix()!r}.'
+            )
+            self.error.occurred = True
+            return -1, None
+
+        return idx, current_theme
+
+    def determine_next_theme(self, current_theme: str, mode: str) -> str:
+        """Determines the next theme based on the mode."""
+        theme_mode = self.get_mode(mode)
+        if not theme_mode:
+            err_msg = f'invalid mode {mode!r}'
+            raise ThemeModeError(err_msg)
+
+        original = self.lines[self._line_idx]
+        return original.replace(current_theme, theme_mode)
+
+    def has_changes(self, mode: str) -> bool:
+        """Checks if t_newhere are changes to be applied to the configuration file."""
+        idx, current_theme = self.find_current_theme()
+        if idx == -1 or current_theme is None:
             return False
 
         self._line_idx = idx
-
-        original = self.lines[idx]
-        theme_mode = self.get_mode(m)
-
-        next_theme = original.replace(current_theme, theme_mode)
+        original = self.lines[self._line_idx]
+        next_theme = self.determine_next_theme(current_theme, mode)
+        self._line_idx = idx
         self._next_theme = next_theme
 
-        if current_theme == theme_mode:
+        if current_theme == mode:
             return False
 
         return original != next_theme
 
-    def has_commands(self) -> bool:
-        """Checks if the application has associated commands."""
-        return bool(self.cmd)
-
-    def get_mode(self, mode: str) -> str:
+    def get_mode(self, mode: str) -> str | None:
         """Returns the theme value for the specified mode."""
-        if mode not in ('light', 'dark'):
-            logger.error(f'invalid mode {mode!r}')
-            sys.exit(1)
-        return self.light if mode == 'light' else self.dark
+        match mode:
+            case 'light':
+                return self.light
+            case 'dark':
+                return self.dark
+            case _:
+                logger.error(f'invalid mode {mode!r}')
+                return None
 
-    def validate(self) -> None:
+    def validate(self) -> Self:
         """Validates the application."""
         if not self.file:
-            self.error.mesg = f'{self.name}: no file specified.'
+            self.error.mesg = 'no file specified.'
             self.error.occurred = True
+            return self
         if not self.dark:
-            self.error.mesg = f'{self.name}: no dark theme specified.'
+            self.error.mesg = 'no dark theme specified.'
             self.error.occurred = True
         if not self.light:
-            self.error.mesg = f'{self.name}: no light theme specified.'
-            self.error.occurred = True
-        if '{theme}' not in self.query:
-            self.error.mesg = f"{self.name}: query does not contain placeholder '{{theme}}'."
+            self.error.mesg = 'no light theme specified.'
             self.error.occurred = True
         if not self.query:
-            self.error.mesg = f'{self.name}: no query specified.'
+            self.error.mesg = 'no query specified.'
             self.error.occurred = True
+            return self
+        if '{theme}' not in self.query:
+            self.error.mesg = "query does not contain placeholder '{theme}'."
+            self.error.occurred = True
+            return self
         if not self.path.exists():
-            self.error.mesg = f"{self.name}: filepath '{self.path!s}' do not exists."
+            self.error.mesg = f"filepath '{self.path!s}' do not exists."
             self.error.occurred = True
+            return self
+        self.find_current_theme()
+        return self
 
     @classmethod
     def new(cls, data: INISection, dry_run: bool) -> App:
@@ -543,6 +565,12 @@ class Wallpaper:
 
     def randx(self) -> Path:
         """Randomly selects a wallpaper."""
+        if not self.random.exists():
+            err_msg = f'random wallpaper path {self.random!s} not found.'
+            raise FileNotFoundError(err_msg)
+        if self.random.is_file():
+            err_msg = f'random wallpaper path {self.random!s} is not a directory.'
+            raise NotADirectoryError(err_msg)
         files = list(self.random.glob('*.*'))
         return random.choice(files)  # noqa: S311
 
@@ -560,8 +588,8 @@ class Wallpaper:
         logs the action without making changes.
         """
         if not path.is_file():
-            logger.debug(f'wallpaper={path} is not a file')
-            return
+            err_msg = f'wallpaper={path} is not a file'
+            raise InvalidFilePathError(err_msg)
 
         print(self, path.name, end=' ')
 
@@ -660,7 +688,7 @@ class Theme:
                 continue
 
             f = values.get('file')
-            if f is None:
+            if f is None or f == '':
                 continue
 
             app = App.new(values, dry_run=self.dry_run)
@@ -673,9 +701,7 @@ class Theme:
         if not section:
             return None
         section['name'] = appname
-        app = App.new(section, dry_run=self.dry_run)
-        app.validate()
-        return app
+        return App.new(section, dry_run=self.dry_run).validate()
 
     def errors(self) -> int:
         """Returns the total number of errors in the theme."""
@@ -784,6 +810,7 @@ def find(query: str, list_strings: list[str]) -> tuple[int, str]:
         match = regex.search(line)
         if match:
             theme_value = match.group(1)
+            logger.debug(f'found theme_value={theme_value!r} in line={line!r}')
             return idx, theme_value
     return -1, ''
 
@@ -898,16 +925,10 @@ def process_app(app: App, mode: str | None) -> None:
         sys.exit(1)
         return
     if app.error.occurred:
-        logger.warning(app.error.mesg)
         print(app, colorize('err', ITALIC, RED))
+        logger.warning(f'{app.name}: {app.error.mesg}')
         return
-    if app.dry_run:
-        print(app, colorize('dry run', ITALIC, CYAN))
-        return
-    if not app.has_changes(mode):
-        print(app, colorize('no changes', ITALIC, GRAY))
-        return
-    app.update()
+    app.update(mode)
 
 
 class Setup:
@@ -935,7 +956,7 @@ class Setup:
         """
         Configures the logging format and level based on the debug flag.
         """
-        logging_format = '[{levelname:^7}] {name:<30}: {message} (line:{lineno})'
+        logging_format = '[{levelname:^7}] {name:<18}: {message} (line:{lineno})'
         levels = [logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG]
         level = levels[min(verbose, len(levels) - 1)]
         logging.basicConfig(
@@ -958,7 +979,7 @@ class Setup:
         parser.add_argument('-m', '--mode', type=str, choices=['dark', 'light'])
         parser.add_argument('-l', '--list', action='store_true')
         parser.add_argument('-a', '--app', type=str)
-        parser.add_argument('-c', '--color', type=str, choices=['always', 'never'], default='always')  # noqa: E501
+        parser.add_argument('--color', type=str, choices=['always', 'never'], default='always')
         parser.add_argument('-L', '--list-apps', action='store_true')
         parser.add_argument('-d', '--dry-run', action='store_true')
         parser.add_argument('-V', '--version', action='store_true')
@@ -1030,7 +1051,7 @@ def handle_theme_updates(theme: Theme, commander: Commander, mode: str) -> None:
     if commander.has_cmds():
         commander.run()
 
-    if theme.wallpaper.has:
+    if hasattr(theme, 'wallpaper') and theme.wallpaper.has:
         theme.wallpaper.set(mode)
 
     for program in PROGRAMS_RESTART:

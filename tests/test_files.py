@@ -7,18 +7,18 @@ from unittest.mock import patch
 import pytest
 
 from pythemes.__main__ import Files
-from tests.conftest import THEME_NAME
+from tests.conftest import CONFIG
 
-FILE_CONTENT = """
+FILE_CONTENT = f"""
 [dunst-reload]
-light=gruvbox.light
-dark=gruvbox.dark
+light={CONFIG.light}
+dark={CONFIG.dark}
 cmd=dunst-ts -s
 """
 
 
 def test_file_mkdir_error(temp_file: Callable[..., Path]):
-    fn = temp_file(filename=THEME_NAME, content=FILE_CONTENT)
+    fn = temp_file(filename=CONFIG.name, content=FILE_CONTENT)
     with pytest.raises(IsADirectoryError, match=rf'Cannot create directory: {fn!s} is a file.'):
         Files.mkdir(fn)
 
@@ -58,6 +58,6 @@ def test_files_readlines_filenotfound():
 
 def test_files_savelines(temp_empty_file: Callable[..., Path]):
     data = ['line1\n', 'line2']
-    fn = temp_empty_file(filename=THEME_NAME)
+    fn = temp_empty_file(filename=CONFIG.name)
     Files.savelines(fn, data)
     assert len(fn.read_text(encoding='utf-8').splitlines()) == len(data)
