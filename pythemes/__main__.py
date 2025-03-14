@@ -30,6 +30,7 @@ INIData = dict[str, INISection]
 APP_ROOT = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
 APP_HOME = APP_ROOT / __appname__.lower()
 PROGRAMS_RESTART: list[str] = []
+PROMPT = '>>'
 HELP = textwrap.dedent(
     f"""usage: {__appname__} [-h] [-m MODE] [-l] [-a APP] [-L] [-d] [-v] [-c COLOR] [--verbose] [theme]
 
@@ -599,7 +600,7 @@ class Wallpaper:
         logger.debug(f'setting wallpaper={path!s}')
         SysOps.run(f'{self.cmd} {path}')
 
-        print(colorize('applied', ITALIC, BLUE))
+        print(colorize('set', ITALIC, BLUE))
 
     def get(self, mode: str, fallback: Path) -> Path:
         """
@@ -682,11 +683,13 @@ class Theme:
         """Checks if the theme has any updates."""
         return self.updates > 0
 
-    def parse_apps(self) -> None:
+    def load(self) -> Self:
         self.inifile.read().parse()
+        return self
+
+    def parse_apps(self) -> None:
         if not self.inifile.data:
             msg_err = f'no data found in {self.inifile.filepath!r}'
-            logger.debug(msg_err)
             raise ValueError(msg_err)
 
         if self.inifile.data.get('wallpaper', False):
@@ -724,7 +727,7 @@ class Theme:
         return sum(app.error.occurred for app in self.apps.values())
 
     def print(self) -> None:
-        print(f'> {self}', end='\n\n')
+        print(f'{PROMPT} {self}', end='\n\n')
 
     def __str__(self) -> str:
         apps = colorize(f'({len(self.apps)} apps)', RED)
@@ -752,6 +755,8 @@ class SysOps:
     @staticmethod
     def send_signal(pids: list[int], signal: signal.Signals) -> None:
         """Sends a signal to a list of process IDs (PIDs)."""
+        if len(pids) == 0:
+            return
         try:
             for pid in pids:
                 logger.debug('sending signal=%s to pid=%s', signal, pid)
@@ -854,7 +859,7 @@ def print_list_themes() -> None:
     max_len = max(len(t.stem) for t in themes_files)
     for fn in themes_files:
         ini = INIFile(fn)
-        theme = Theme(fn.stem, ini, dry_run=True)
+        theme = Theme(fn.stem, ini, dry_run=True).load()
         theme.parse_apps()
         apps = colorize(f'({len(theme.apps)} apps)', ITALIC, GRAY)
         t = colorize('[theme]', BOLD, BLUE)
@@ -874,6 +879,7 @@ def print_list_apps(t: str | None) -> int:
 
     inifile = INIFile(fn)
     theme = Theme(t, inifile, dry_run=SysOps.dry_run)
+    theme.load()
     theme.parse_apps()
     theme.print()
 
@@ -1034,7 +1040,7 @@ def handle_missing_theme(theme_name: str) -> int:
 def initialize_theme(theme_name: str, filepath: Path, dry_run: bool) -> Theme:
     """Initializes and parses the theme from the INI file."""
     ini = INIFile(filepath)
-    theme = Theme(theme_name, ini, dry_run=dry_run)
+    theme = Theme(theme_name, ini, dry_run=dry_run).load()
     theme.parse_apps()
     theme.print()
     return theme
@@ -1076,9 +1082,9 @@ def handle_theme_updates(theme: Theme, commander: Commander, mode: str) -> None:
     for program in PROGRAMS_RESTART:
         SysOps.restart(program)
 
-    print(f'\n> {colorize(str(theme.updates), BOLD, BLUE)} apps updated')
+    print(f'\n{PROMPT} {colorize(str(theme.updates), BOLD, BLUE)} apps updated')
     if n_errors:
-        print(f'> {colorize(str(n_errors), BOLD, RED)} errors occurred')
+        print(f'{PROMPT} {colorize(str(n_errors), BOLD, RED)} errors occurred')
 
 
 def main() -> int:

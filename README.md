@@ -55,7 +55,7 @@ locations:
 [app] zathura applied.
 [cmd] dunst executed.
 [cmd] xresources executed.
-[wal] my-dark-wallpaper.jpg setted.
+[wal] my-dark-wallpaper.jpg set.
 [sys] dwm restarted.
 [sys] st restarted.
 

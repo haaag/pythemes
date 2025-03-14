@@ -38,11 +38,10 @@ def test_raises_nosectionserr(temp_ini):
         ini.read()
 
 
-def test_raises_filenotfounderr():
+def test_raises_read_filenotfounderr():
     f = Path('/nonexistent/file.ini')
-    with pytest.raises(FileNotFoundError):
-        ini = INIFile(f)
-        ini.read()
+    with pytest.raises(FileNotFoundError, match=rf'INI file path {f.name!r} not found.'):
+        _ = INIFile(f).read()
 
 
 def test_parse_data(ini_filepath: Path, temp_section: INISection):

@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
+import pytest
+
 from tests.conftest import CONFIG
 
 if TYPE_CHECKING:
@@ -14,6 +16,7 @@ if TYPE_CHECKING:
 
 def test_theme_init(theme: Theme):
     assert theme.name == CONFIG.name
+    theme.load()
     theme.parse_apps()
     assert theme.inifile.filepath.exists()
     assert hasattr(theme, 'wallpaper')
@@ -47,12 +50,14 @@ def test_theme_errors(theme: Theme, temp_section: INISection):
     for i in range(expected_errors):
         temp_section['query'] = f'invalid_query {i}'
         theme.inifile.add(f'invalid_section_{i}', temp_section)
+    theme.load()
     theme.parse_apps()
     assert theme.errors() == expected_errors
 
 
 def test_theme_get(theme: Theme):
     target_app = 'xresources'
+    theme.load()
     theme.parse_apps()
     app = theme.get(target_app)
     assert app is not None
@@ -60,3 +65,8 @@ def test_theme_get(theme: Theme):
     nonexistent_app = 'nonexistent'
     app = theme.get(nonexistent_app)
     assert app is None
+
+
+def test_theme_parse_apps(theme: Theme):
+    with pytest.raises(ValueError):
+        theme.parse_apps()

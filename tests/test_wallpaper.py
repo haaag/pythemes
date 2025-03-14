@@ -9,7 +9,7 @@ from pythemes.__main__ import InvalidFilePathError
 from pythemes.__main__ import Wallpaper
 
 
-@pytest.fixture
+@pytest.fixture()
 def temp_wall_files(temp_directory: Callable[..., Path]) -> dict[str, Path]:
     path = temp_directory('wallpaper')
     darkfile = path / 'dark.jpg'

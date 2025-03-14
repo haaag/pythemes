@@ -140,8 +140,7 @@ def ini_filepath(tmp_path: Path, temp_content_with_valid_files: str) -> Path:
 
 @pytest.fixture
 def theme(ini_filepath: Path) -> Theme:
-    ini = INIFile(ini_filepath).read().parse()
-    return Theme(CONFIG.name, ini, dry_run=True)
+    return Theme(CONFIG.name, INIFile(ini_filepath), dry_run=True)
 
 
 @pytest.fixture
