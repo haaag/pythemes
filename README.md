@@ -25,13 +25,16 @@ This script will take care of that. It's designed to handle system and applicati
 usage: pythemes [-h] [-m MODE] [-l] [-a APP] [-L] [-d] [-v] [-t] [--verbose] [theme]
 
 options:
-    theme               select a theme
-    -m, --mode          select a mode [light|dark]
-    -l, --list          list available themes
-    -a, --app           apply mode to app
-    -L, --list-apps     list available apps in theme
-    -d, --dry-run       simulate action
-    -h, --help          print this help message
+    theme               Theme name
+    -m, --mode          Select a mode [light|dark]
+    -l, --list          List available themes
+    -a, --app           Apply mode to app
+    -L, --list-apps     List available apps in theme
+    -d, --dry-run       Do not make any changes
+    -V, --version       Print version and exit
+    -v, --verbose       Increase output verbosity
+    -c, --color         Enable color [always|never] (default: always)
+    -h, --help          Print this help message
 
 locations:
   /home/$USER/.config/pythemes
@@ -114,6 +117,14 @@ query:    the query to find in the file
 light:    the theme to use for the light theme
 dark:     the theme to use for the dark theme
 cmd:      the command to execute (optional)
+```
+
+### ⚙️ Command section (WIP)
+
+
+```ini
+[cmd]:
+...
 ```
 
 ### 🌄 Wallpaper section
