@@ -139,7 +139,7 @@ cmd:      commands that will receive the signal SIGUSR1
 
 This is a example INI file for pythemes.
 
-You can find the complete example [here](https://raw.githubusercontent.com/haaag/pythemes/refs/heads/master/example/gruvbox.ini?token=GHSAT0AAAAAAC46UJSEWLCPAKRCPRJDC6S4Z4VB3RQ)
+You can find the complete example [here](./example/gruvbox.ini)
 
 ```ini
 ; the script will read this file and find the `query` line and replace it with
