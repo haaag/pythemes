@@ -106,3 +106,17 @@ def test_app_invalid(
     assert mesg_got == f'{app.name}: {app.error.mesg}', (
         f'want: {expected_err_mesg!r}, got: {mesg_got!r}'
     )
+
+
+@pytest.mark.parametrize(
+    'name, mode, expected, reason',
+    [
+        ('has_changes', 'dark', False, 'must return string with changes'),
+        ('empty_mode', '', True, 'must return an empty string'),
+        ('no_changes', 'light', True, 'must return an empty string'),
+    ],
+)
+def test_app_difffff(valid_app_with_file: App, name, mode, expected, reason):
+    app = valid_app_with_file
+    got = app.diff(mode)
+    assert (got == '') == expected, f'{name}: {reason}'
