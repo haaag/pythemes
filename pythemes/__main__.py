@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Self
 
 __appname__ = 'pythemes'
-__version__ = 'v0.1.6'
+__version__ = 'v0.1.8'
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class BaseError:
 class Differ:
     """Represents a diff between two strings"""
 
-    def changes(self, old: str, new: str) -> str:
+    def changes(self, old: str, new: str) -> str:  # dead: disable
         return self.process(old, new)
 
     def changes_with_indicators(self, old: str, new: str) -> str:
@@ -862,7 +862,7 @@ class SysOps:
         return SysOps.send_signal(pids, signal.SIGUSR1)
 
     @staticmethod
-    def is_executable(c: str) -> bool:
+    def is_executable(c: str) -> bool:  # dead: disable
         """
         Checks if a command is executable by verifying its
         existence in the system's PATH.
@@ -927,64 +927,52 @@ def print_list_themes() -> None:
         print(f'{t} {theme.name:<{max_len}} {apps}')
 
 
-def print_list_apps(t: str | None) -> int:
-    """Prints a list of all apps for a given theme."""
-    if not t:
-        logger.error('no theme specified')
-        return 1
-
-    fn = get_filetheme(t)
-    if not fn:
-        logger.error(f'theme={t} not found')
-        return 1
-
-    inifile = INIFile(fn)
-    theme = Theme(t, inifile, dry_run=SysOps.dry_run)
-    theme.load()
-    theme.parse_apps()
-    theme.print()
-
-    for app in theme.apps.values():
-        print(app)
-
-    return 0
-
-
-def get_app(theme: Theme, args: argparse.Namespace) -> App | None:
+def get_app(theme: Theme, appname: str, mode: str) -> App | None:
     """Returns an App from the given Theme."""
-    if not args.app:
+    if not appname:
         logger.warning('no app specified')
         return None
-    if not args.mode:
+    if not mode:
         logger.warning('no mode specified (dark|light)')
         return None
-    if not (app := theme.get(args.app)):
-        logger.warning(f'app {args.app!r} not found')
+    if not (app := theme.get(appname)):
+        logger.warning(f'app {appname!r} not found')
         return None
     return app
 
 
-def parse_and_exit(args: argparse.Namespace, theme: Theme) -> None:
-    """Parses command-line arguments and performs corresponding actions."""
-    if args.version:
-        version()
-        sys.exit(0)
-    if args.help:
-        print(HELP)
-        sys.exit(0)
+def handle_theme_actions(args: argparse.Namespace, theme: Theme) -> None | int:
     if args.list_apps:
         theme.print()
         theme.list()
-        sys.exit(0)
+        return 0
     if args.diff:
-        sys.exit(diff_app(theme, args))
+        return diff_app(theme, args.app, args.mode)
     if args.app:
-        sys.exit(update_app(theme, args))
+        return update_app(theme, args.app, args.mode)
+    return None
+
+
+def parse_and_exit(args: argparse.Namespace) -> None | int:
+    """Parses command-line arguments and performs corresponding actions."""
+    if args.version:
+        version()
+        return 0
+    if args.help:
+        print(HELP)
+        return 0
     if args.list:
         version()
         print('\nThemes found:')
         print_list_themes()
-        sys.exit(0)
+        return 0
+    if args.diff and not args.app:
+        print(f"{__appname__}: '--diff' requires '--app' (-a)", file=sys.stderr)
+        return 1
+    if not args.theme:
+        print(HELP)
+        return 1
+    return None
 
 
 def process_app(app: App, mode: str | None) -> None:
@@ -1017,6 +1005,9 @@ class Setup:
         SysOps.color = args.color == 'always'
 
         logging.debug(vars(args))
+
+        if (retcode := parse_and_exit(args)) is not None:
+            sys.exit(retcode)
         return args
 
     @staticmethod
@@ -1052,11 +1043,7 @@ class Setup:
         parser.add_argument('-V', '--version', action='store_true')
         parser.add_argument('-h', '--help', action='store_true')
         parser.add_argument('-v', '--verbose', action='count', default=0)
-        args = parser.parse_args()
-        if args.diff and not args.app:
-            print(f"{__appname__}: '--diff' requires '--app' (-a)", file=sys.stderr)
-            sys.exit(1)
-        return args
+        return parser.parse_args()
 
 
 def get_filetheme(name: str) -> Path | None:
@@ -1136,10 +1123,10 @@ def handle_theme_updates(theme: Theme, commander: Commander, mode: str) -> None:
         print(f'{GRAY}>{END} {colorize(str(n_errors), BOLD, RED)} errors occurred')
 
 
-def diff_app(theme: Theme, args: argparse.Namespace) -> int:
-    if not (app := get_app(theme, args)):
+def diff_app(theme: Theme, appname: str, mode: str) -> int:
+    if not (app := get_app(theme, appname, mode)):
         return 1
-    if not (diff := app.diff(args.mode)):
+    if not (diff := app.diff(mode)):
         print(app)
         return 1
     print(app)
@@ -1148,24 +1135,22 @@ def diff_app(theme: Theme, args: argparse.Namespace) -> int:
     return 0
 
 
-def update_app(theme: Theme, args: argparse.Namespace) -> int:
-    if not (app := get_app(theme, args)):
+def update_app(theme: Theme, appname: str, mode: str) -> int:
+    if not (app := get_app(theme, appname, mode)):
         return 1
-    process_app(app, args.mode)
+    process_app(app, mode)
     print(app)
     return 0
 
 
 def main() -> int:
     args = Setup.init(APP_HOME)
-    if not args.theme:
-        print(HELP)
-        return 1
     if not (fn := get_filetheme(args.theme)):
         return handle_missing_theme(args.theme)
 
     theme = initialize_theme(args.theme, fn, args.dry_run)
-    parse_and_exit(args, theme)
+    if (retcode := handle_theme_actions(args, theme)) is not None:
+        return retcode
     process_theme(theme, args.mode)
 
     return 0

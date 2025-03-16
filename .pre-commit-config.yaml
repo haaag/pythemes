@@ -25,7 +25,7 @@ repos:
 
   # Ruff
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.10.0
+    rev: v0.11.0
     hooks:
       - id: ruff
 
@@ -70,7 +70,7 @@ repos:
         pass_filenames: false
         args: ["-k", "not test_color_fn"]
 
-  # - repo: https://github.com/asottile/dead
-  #   rev: v1.5.2
-  #   hooks:
-  #     - id: dead
+  - repo: https://github.com/asottile/dead
+    rev: v2.1.0
+    hooks:
+      - id: dead
